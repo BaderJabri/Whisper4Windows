@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recording...</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: transparent;
+            overflow: hidden;
+            -webkit-app-region: drag;
+        }
+
+        .recording-container {
+            background: #2a2a2a;
+            border-radius: 16px;
+            padding: 20px 24px;
+            width: 600px;
+            height: 180px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid #3a3a3a;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            -webkit-app-region: no-drag;
+        }
+
+        .top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background: #4a9eff;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 1; 
+                transform: scale(1);
+                box-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+            }
+            50% { 
+                opacity: 0.6; 
+                transform: scale(0.85);
+                box-shadow: 0 0 5px rgba(74, 158, 255, 0.3);
+            }
+        }
+
+        .model-selector {
+            margin-left: auto;
+        }
+
+        .model-selector select {
+            background: #3a3a3a;
+            color: #fff;
+            border: 1px solid #4a4a4a;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+            -webkit-app-region: no-drag;
+        }
+
+        .model-selector select:hover {
+            background: #404040;
+            border-color: #5a5a5a;
+        }
+
+        .visualizer-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            height: 50px;
+            margin: 8px 0;
+        }
+
+        .visualizer-dot {
+            width: 3px;
+            height: 3px;
+            background: #4a9eff;
+            border-radius: 50%;
+            transition: all 0.05s ease-out;
+            opacity: 0.3;
+        }
+
+        .visualizer-dot.active {
+            opacity: 1;
+            background: #4a9eff;
+        }
+
+        .bottom-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #999;
+        }
+
+        .shortcut-hints {
+            display: flex;
+            gap: 20px;
+        }
+
+        .hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .hint-label {
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .hint-key {
+            background: #3a3a3a;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #999;
+            border: 1px solid #4a4a4a;
+            font-family: monospace;
+        }
+
+        .device-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(74, 158, 255, 0.15);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #4a9eff;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .recording-container {
+            animation: slideIn 0.2s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="recording-container">
+        <div class="top-row">
+            <div class="status-indicator">
+                <div class="recording-dot"></div>
+                <span class="status-text" id="statusText">Recording</span>
+            </div>
+            <div class="model-selector">
+                <select id="modelSelector">
+                    <option value="tiny">⚡ Tiny</option>
+                    <option value="base">🔷 Base</option>
+                    <option value="small" selected>✨ Small</option>
+                    <option value="medium">🎯 Medium</option>
+                    <option value="large-v3">🚀 Large V3</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="visualizer-container" id="visualizer">
+            <!-- Dots will be generated by JavaScript -->
+        </div>
+
+        <div class="bottom-row">
+            <div class="shortcut-hints">
+                <div class="hint">
+                    <span class="hint-label">Stop</span>
+                    <span class="hint-key">Alt+X</span>
+                </div>
+                <div class="hint">
+                    <span class="hint-label">Cancel</span>
+                    <span class="hint-key">Esc</span>
+                </div>
+            </div>
+            <div class="device-indicator" id="deviceIndicator">
+                <span id="deviceIcon">🔄</span>
+                <span id="deviceText">Auto</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://127.0.0.1:8000';
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationId = null;
+        let isRecording = true;
+        let mediaStream = null;
+
+        // Create visualizer dots
+        function initVisualizer() {
+            const visualizer = document.getElementById('visualizer');
+            visualizer.innerHTML = '';
+            for (let i = 0; i < 150; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'visualizer-dot';
+                visualizer.appendChild(dot);
+            }
+        }
+
+        // Start audio visualization
+        async function startAudioVisualization() {
+            try {
+                console.log('🎤 Requesting microphone access...');
+                mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                
+                console.log('✅ Microphone access granted');
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(mediaStream);
+                
+                analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.7;
+                analyser.minDecibels = -90;
+                analyser.maxDecibels = -10;
+                microphone.connect(analyser);
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const dots = document.querySelectorAll('.visualizer-dot');
+                
+                console.log('🎵 Starting audio animation...');
+                
+                function animate() {
+                    if (!isRecording) {
+                        console.log('⏹️ Animation stopped');
+                        return;
+                    }
+                    
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    // Calculate average volume for debugging
+                    const average = dataArray.reduce((a, b) => a + b, 0) / bufferLength;
+                    
+                    // Update dots based on frequency data
+                    dots.forEach((dot, i) => {
+                        const dataIndex = Math.floor(i * bufferLength / dots.length);
+                        const value = dataArray[dataIndex];
+                        
+                        // Make dots more sensitive to audio
+                        const threshold = 20; // Lower threshold for better visibility
+                        const scaledValue = Math.max(0, (value - threshold) / (255 - threshold));
+                        
+                        if (scaledValue > 0.15) {
+                            dot.classList.add('active');
+                            // Scale dot size based on volume
+                            const scale = 1 + (scaledValue * 2);
+                            dot.style.transform = `scale(${scale})`;
+                        } else {
+                            dot.classList.remove('active');
+                            dot.style.transform = 'scale(1)';
+                        }
+                    });
+                    
+                    animationId = requestAnimationFrame(animate);
+                }
+                
+                animate();
+                
+            } catch (error) {
+                console.error('❌ Microphone access error:', error);
+                console.log('🔄 Falling back to wave animation');
+                startFallbackAnimation();
+            }
+        }
+
+        // Fallback animation if mic access fails
+        function startFallbackAnimation() {
+            const dots = document.querySelectorAll('.visualizer-dot');
+            
+            function animate() {
+                if (!isRecording) return;
+                
+                dots.forEach((dot, i) => {
+                    const wave = Math.sin((Date.now() / 300) + (i * 0.1)) * 0.5 + 0.5;
+                    if (wave > 0.5) {
+                        dot.classList.add('active');
+                        const scale = 1 + ((wave - 0.5) * 2);
+                        dot.style.transform = `scale(${scale})`;
+                    } else {
+                        dot.classList.remove('active');
+                        dot.style.transform = 'scale(1)';
+                    }
+                });
+                
+                animationId = requestAnimationFrame(animate);
+            }
+            
+            animate();
+        }
+
+        // Stop visualization
+        function stopAudioVisualization() {
+            console.log('🛑 Stopping audio visualization');
+            isRecording = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('🎤 Stopped microphone track');
+                });
+                mediaStream = null;
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+        }
+
+        // Stop recording
+        async function stopRecording() {
+            if (!isRecording) {
+                console.log('⚠️ Already stopped');
+                return;
+            }
+            
+            console.log('🛑 Stopping recording...');
+            
+            const statusEl = document.getElementById('statusText');
+            statusEl.textContent = 'Processing...';
+            
+            stopAudioVisualization();
+            
+            try {
+                console.log('📡 Calling backend /stop...');
+                const response = await fetch(`${BACKEND_URL}/stop`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                console.log('📦 Backend response:', data);
+                
+                if (response.ok && data.status === 'success') {
+                    const finalText = data.text || "";
+                    console.log('✅ Transcription:', finalText);
+                    
+                    // Log transcription timing
+                    if (data.transcription_time) {
+                        console.log(`⏱️ Transcription took: ${data.transcription_time.toFixed(2)}s`);
+                        console.log(`📊 Audio duration: ${data.duration?.toFixed(2)}s`);
+                        const speedup = data.duration / data.transcription_time;
+                        console.log(`🚀 Speed: ${speedup.toFixed(1)}x realtime`);
+                    }
+                    
+                    // Inject text
+                    if (finalText) {
+                        const { invoke } = window.__TAURI_INTERNALS__;
+                        await invoke('inject_text_directly', { text: finalText });
+                        console.log('✅ Text injected');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Stop recording error:', error);
+            }
+            
+            // Reset backend state and hide window
+            await cleanupAndHide();
+        }
+        
+        // Cleanup and hide window
+        async function cleanupAndHide() {
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                
+                // Reset recording state
+                await invoke('reset_recording_state');
+                console.log('✅ Recording state reset');
+                
+                // Reset status text for next time
+                const statusEl = document.getElementById('statusText');
+                if (statusEl) {
+                    statusEl.textContent = 'Recording';
+                }
+                
+                // Hide window using Tauri API
+                const { webviewWindow } = window.__TAURI_INTERNALS__;
+                const currentWindow = webviewWindow.getCurrent();
+                await currentWindow.hide();
+                console.log('✅ Window hidden');
+                
+            } catch (error) {
+                console.error('❌ Window cleanup error:', error);
+                console.error('Error details:', error.message);
+            }
+        }
+
+        // Cancel recording
+        async function cancelRecording() {
+            console.log('❌ Canceling recording...');
+            stopAudioVisualization();
+            
+            try {
+                await fetch(`${BACKEND_URL}/cancel`, { method: 'POST' });
+                console.log('✅ Backend cancel request sent');
+            } catch (error) {
+                console.error('Cancel error:', error);
+            }
+            
+            // Use the same cleanup function
+            await cleanupAndHide();
+        }
+
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelRecording();
+            }
+        });
+
+        // Listen for hotkey events
+        if (window.__TAURI_INTERNALS__) {
+            const { event } = window.__TAURI_INTERNALS__;
+            
+            // Listen for hotkey stop event
+            event.listen('hotkey-stop-recording', (evt) => {
+                console.log('📡 ========================================');
+                console.log('📡 Received hotkey-stop-recording event!');
+                console.log('📡 Event details:', evt);
+                console.log('📡 ========================================');
+                stopRecording();
+            });
+            
+            console.log('👂 Event listener registered for hotkey-stop-recording');
+            console.log('👂 Tauri internals available:', !!window.__TAURI_INTERNALS__);
+        } else {
+            console.error('❌ Tauri internals not available!');
+        }
+
+        // Start recording when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 Recording UI loaded');
+            initVisualizer();
+            await startAudioVisualization();
+            console.log('🎙️ Recording started');
+        });
+    </script>
+</body>
+</html>

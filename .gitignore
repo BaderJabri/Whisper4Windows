@@ -1,0 +1,61 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.Python
+backend/pip-log.txt
+backend/pip-delete-this-directory.txt
+backend/.pytest_cache/
+backend/*.egg-info/
+backend/dist/
+backend/build/
+
+# Whisper models (large files) - exclude ALL models
+# Users will download them automatically on first run (~500MB for small model)
+backend/models/
+
+# Recorded audio files
+backend/*.wav
+backend/recordings/
+
+# Rust/Tauri
+frontend/src-tauri/target/
+frontend/node_modules/
+**/Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.claude/
+
+# OS
+.DS_Store
+Thumb   s.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+image/
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+md/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+

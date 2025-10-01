@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisper4Windows - Settings</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h3 {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            flex: 1;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: #764ba2;
+        }
+
+        button.secondary:hover {
+            background: #653a8a;
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+            margin-bottom: 25px;
+        }
+
+        .info-box h4 {
+            margin-bottom: 8px;
+            color: #1976d2;
+            font-size: 14px;
+        }
+
+        .info-box p {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #555;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ Whisper4Windows</h1>
+        <p class="subtitle">Local Speech-to-Text for Windows</p>
+
+        <div class="info-box">
+            <h4>🎤 Speech-to-Text</h4>
+            <p>Backend Status: <span id="backendStatus" style="font-weight: 600;">Checking...</span></p>
+            <p style="font-size: 12px; margin-top: 5px;">
+                <strong>Hotkey:</strong> Press <kbd style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; border: 1px solid #ccc;">Alt+T</kbd> anywhere to start/stop recording!<br>
+                Or use buttons below to record manually.
+            </p>
+        </div>
+
+        <div class="section">
+            <h3>🎤 Speech-to-Text <span class="badge" style="background: #28a745;">SIMPLE MODE</span></h3>
+            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                Click START, speak, then click STOP. Transcription happens when you stop!
+            </p>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 13px; font-weight: 600; color: #444;">Model Quality:</label>
+                <select id="modelSelector" style="margin-left: 10px; padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+                    <option value="tiny">⚡ Tiny (Fastest, Lower Accuracy)</option>
+                    <option value="base">🔷 Base (Fast, Decent Accuracy)</option>
+                    <option value="small" selected>✨ Small (Balanced - RECOMMENDED)</option>
+                    <option value="medium">🎯 Medium (Slower, High Accuracy)</option>
+                    <option value="large-v3">🚀 Large V3 (Best Quality, Slowest)</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 13px; font-weight: 600; color: #444;">Processing Device:</label>
+                <div style="display: inline-flex; margin-left: 10px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
+                    <button id="deviceAuto" onclick="selectDevice('auto')" style="padding: 5px 15px; border: none; background: #667eea; color: white; cursor: pointer; font-size: 12px; border-radius: 0;">
+                        🔄 Auto
+                    </button>
+                    <button id="deviceGPU" onclick="selectDevice('cuda')" style="padding: 5px 15px; border: none; background: white; color: #333; cursor: pointer; font-size: 12px; border-left: 1px solid #ddd; border-radius: 0;">
+                        ⚡ GPU
+                    </button>
+                    <button id="deviceCPU" onclick="selectDevice('cpu')" style="padding: 5px 15px; border: none; background: white; color: #333; cursor: pointer; font-size: 12px; border-left: 1px solid #ddd; border-radius: 0;">
+                        💻 CPU
+                    </button>
+                </div>
+                <small id="deviceHint" style="display: block; margin-top: 5px; color: #666; font-size: 11px;">
+                    Auto: Tries GPU first, falls back to CPU if needed
+                </small>
+            </div>
+            
+            <div class="button-group">
+                <button id="liveStartBtn" onclick="startLiveRecording()" style="background: #28a745;">▶️ START Recording</button>
+                <button id="liveStopBtn" onclick="stopLiveRecording()" style="background: #dc3545; display: none;">⏹️ STOP Recording</button>
+            </div>
+            
+            <div id="liveStatus" class="status"></div>
+            <div id="liveTranscription" style="margin-top: 15px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #28a745; display: none;">
+                <strong style="color: #28a745;">🎙️ LIVE: </strong>
+                <p id="liveText" style="margin: 10px 0; font-size: 16px; line-height: 1.8; font-weight: 500;"></p>
+                <small style="color: #666;" id="liveMeta">Listening...</small>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Backend communication
+        const BACKEND_URL = 'http://127.0.0.1:8000';
+
+        async function checkBackendHealth() {
+            try {
+                console.log('🔍 Checking backend health at:', `${BACKEND_URL}/health`);
+                const response = await fetch(`${BACKEND_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                console.log('📡 Response status:', response.status);
+                const data = await response.json();
+                console.log('📦 Response data:', data);
+                document.getElementById('backendStatus').textContent = `✅ ${data.backend.toUpperCase()} (${data.model})`;
+                document.getElementById('backendStatus').style.color = '#155724';
+                return true;
+            } catch (error) {
+                document.getElementById('backendStatus').textContent = '❌ Offline';
+                document.getElementById('backendStatus').style.color = '#721c24';
+                console.error('❌ Backend health check failed:', error);
+                console.error('Error details:', error.message, error.stack);
+                return false;
+            }
+        }
+
+
+        // Device selection
+        let selectedDevice = 'auto';
+        
+        function selectDevice(device) {
+            selectedDevice = device;
+            
+            // Update button styles
+            const buttons = {
+                'auto': document.getElementById('deviceAuto'),
+                'cuda': document.getElementById('deviceGPU'),
+                'cpu': document.getElementById('deviceCPU')
+            };
+            
+            // Reset all buttons
+            Object.values(buttons).forEach(btn => {
+                btn.style.background = 'white';
+                btn.style.color = '#333';
+            });
+            
+            // Highlight selected
+            buttons[device].style.background = '#667eea';
+            buttons[device].style.color = 'white';
+            
+            // Update hint text
+            const hints = {
+                'auto': 'Auto: Tries GPU first, falls back to CPU if needed',
+                'cuda': 'GPU: Fast transcription using NVIDIA GPU (requires cuDNN)',
+                'cpu': 'CPU: Slower but always works (no GPU required)'
+            };
+            document.getElementById('deviceHint').textContent = hints[device];
+            
+            // Save to backend state
+            saveSettings();
+        }
+        
+        // Save current settings to backend
+        async function saveSettings() {
+            const modelSelector = document.getElementById('modelSelector');
+            const model = modelSelector ? modelSelector.value : 'small';
+            
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_model_and_device', { 
+                    model: model,
+                    device: selectedDevice 
+                });
+                console.log(`Settings saved: model=${model}, device=${selectedDevice}`);
+            } catch (error) {
+                console.error('Error saving settings:', error);
+            }
+        }
+        
+        // Start recording (simple - no live transcription)
+        async function startLiveRecording() {
+            const statusEl = document.getElementById('liveStatus');
+            const startBtn = document.getElementById('liveStartBtn');
+            const stopBtn = document.getElementById('liveStopBtn');
+            const transcriptionBox = document.getElementById('liveTranscription');
+            const liveTextEl = document.getElementById('liveText');
+            const liveMeta = document.getElementById('liveMeta');
+            const modelSelector = document.getElementById('modelSelector');
+            
+            const selectedModel = modelSelector.value;
+            
+            try {
+                statusEl.textContent = `⏳ Initializing ${selectedModel} model on ${selectedDevice.toUpperCase()}...`;
+                statusEl.className = 'status';
+                statusEl.style.display = 'block';
+                
+                // Start recording on backend
+                const response = await fetch(`${BACKEND_URL}/start`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        model_size: selectedModel,
+                        language: 'en',
+                        device: selectedDevice
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'started') {
+                    const deviceIcon = data.device === 'cuda' ? '⚡ GPU' : '💻 CPU';
+                    statusEl.textContent = `🎙️ RECORDING on ${deviceIcon} - Speak now! Click STOP when done.`;
+                    statusEl.className = 'status success';
+                    
+                    startBtn.style.display = 'none';
+                    stopBtn.style.display = 'inline-block';
+                    transcriptionBox.style.display = 'block';
+                    
+                    liveTextEl.textContent = "(Recording in progress... Click STOP to transcribe)";
+                    liveMeta.textContent = `Model: ${selectedModel} | Device: ${deviceIcon}`;
+                } else {
+                    statusEl.textContent = '❌ Failed to start: ' + (data.message || 'Unknown error');
+                    statusEl.className = 'status error';
+                }
+                
+            } catch (error) {
+                statusEl.textContent = '❌ Error: ' + error;
+                statusEl.className = 'status error';
+                console.error('Start recording failed:', error);
+            }
+        }
+
+        // Stop recording and get transcription
+        async function stopLiveRecording() {
+            const statusEl = document.getElementById('liveStatus');
+            const startBtn = document.getElementById('liveStartBtn');
+            const stopBtn = document.getElementById('liveStopBtn');
+            const liveTextEl = document.getElementById('liveText');
+            const liveMeta = document.getElementById('liveMeta');
+            
+            try {
+                // Show appropriate wait time based on device
+                const waitMsg = selectedDevice === 'cpu' 
+                    ? '⏳ Transcribing... (This may take 5-15 seconds on CPU)'
+                    : '⏳ Transcribing... (Should be done in 1-3 seconds on GPU)';
+                statusEl.textContent = waitMsg;
+                statusEl.className = 'status';
+                liveTextEl.textContent = "(Transcribing your recording...)";
+                
+                const response = await fetch(`${BACKEND_URL}/stop`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    const finalText = data.text || "";
+                    const deviceIcon = data.device === 'cuda' ? '⚡ GPU' : '💻 CPU';
+                    liveTextEl.textContent = finalText || "(No speech detected)";
+                    liveMeta.textContent = `Duration: ${data.duration?.toFixed(1)}s | Language: ${data.language} | Device: ${deviceIcon}`;
+                    
+                    statusEl.textContent = `✅ Transcription complete! ${finalText.split(' ').length} words on ${deviceIcon}.`;
+                    statusEl.className = 'status success';
+                    
+                    startBtn.style.display = 'inline-block';
+                    stopBtn.style.display = 'none';
+                    
+                    // Auto-inject text after transcription
+                    if (finalText) {
+                        const { invoke } = window.__TAURI_INTERNALS__;
+                        
+                        // Inject immediately
+                        try {
+                            await invoke('inject_text_directly', { text: finalText });
+                            statusEl.textContent = `✅ Text injected! ${finalText.split(' ').length} words on ${deviceIcon}.`;
+                            statusEl.className = 'status success';
+                        } catch (error) {
+                            console.error('Injection error:', error);
+                            statusEl.textContent = `✅ Transcribed but injection failed: ${error}`;
+                            statusEl.className = 'status error';
+                        }
+                    }
+                } else {
+                    statusEl.textContent = '❌ Transcription failed: ' + (data.message || 'Unknown error');
+                    statusEl.className = 'status error';
+                    
+                    startBtn.style.display = 'inline-block';
+                    stopBtn.style.display = 'none';
+                }
+                
+            } catch (error) {
+                statusEl.textContent = '❌ Error: ' + error;
+                statusEl.className = 'status error';
+                console.error('Stop recording failed:', error);
+                
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+            }
+        }
+
+
+        // Global hotkey event handlers
+        let isHotkeyRecording = false;
+        
+        async function handleHotkeyStart() {
+            console.log('🔥 Hotkey START event received');
+            isHotkeyRecording = true;
+            
+            // Start recording silently (hotkey mode)
+            await startLiveRecording();
+        }
+        
+        async function handleHotkeyStop() {
+            console.log('🔥 Hotkey STOP event received');
+            isHotkeyRecording = false;
+            
+            // Stop recording and transcribe
+            await stopLiveRecording();
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Whisper4Windows UI Loaded');
+            
+            // Listen for global hotkey events from Tauri
+            if (window.__TAURI_INTERNALS__) {
+                const { listen } = window.__TAURI_INTERNALS__;
+                
+                listen('hotkey-start-recording', () => {
+                    console.log('📡 Received hotkey-start-recording event');
+                    handleHotkeyStart();
+                });
+                
+                listen('hotkey-stop-recording', () => {
+                    console.log('📡 Received hotkey-stop-recording event');
+                    handleHotkeyStop();
+                });
+                
+                console.log('✅ Hotkey listeners registered');
+                console.log('💡 Press Alt+T to start/stop recording from anywhere!');
+            }
+            
+            // Check backend status on load
+            setTimeout(() => {
+                checkBackendHealth();
+            }, 500);
+            
+            // Save initial settings
+            setTimeout(() => {
+                saveSettings();
+            }, 1000);
+            
+            // Monitor model selector changes
+            const modelSelector = document.getElementById('modelSelector');
+            if (modelSelector) {
+                modelSelector.addEventListener('change', () => {
+                    saveSettings();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

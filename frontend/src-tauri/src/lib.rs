@@ -164,6 +164,34 @@ async fn cmd_stop_recording(app: AppHandle) -> Result<(), String> {
     log::info!("🛑 STOP RECORDING");
     log::info!("═══════════════════════════════════════════════");
 
+    // Call backend /stop to get transcription
+    let client = reqwest::Client::new();
+    match client.post("http://127.0.0.1:8000/stop")
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            log::info!("✅ Backend stopped");
+
+            // Get transcription text
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Some(text) = data.get("text").and_then(|t| t.as_str()) {
+                    log::info!("📝 Transcription: {}", text);
+
+                    // Inject text
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                    if let Err(e) = inject_text(text) {
+                        log::error!("❌ Injection failed: {}", e);
+                    } else {
+                        log::info!("✅ Text injected");
+                    }
+                }
+            }
+        }
+        Ok(resp) => log::error!("❌ Backend error: {}", resp.status()),
+        Err(e) => log::error!("❌ Request failed: {}", e),
+    }
+
     // Hide window
     if let Some(win) = app.get_webview_window("recording") {
         win.hide().map_err(|e| e.to_string())?;
@@ -183,9 +211,8 @@ async fn cmd_toggle_recording(app: AppHandle, state: State<'_, AppState>) -> Res
         log::info!("   Window visible: {}", is_visible);
 
         if is_visible {
-            // Stop - just hide window, frontend will call /stop
-            win.hide().map_err(|e| e.to_string())?;
-            log::info!("✅ Stopped - window hidden");
+            // Stop - call backend /stop, transcribe, and inject
+            cmd_stop_recording(app).await?;
         } else {
             // Start
             cmd_start_recording(app, state).await?;

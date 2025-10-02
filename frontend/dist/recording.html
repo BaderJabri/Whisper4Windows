@@ -183,14 +183,30 @@
             <button class="stop-btn" onclick="stopRecording()">Stop   F9</button>
             <button class="cancel-btn" onclick="cancelRecording()">Cancel   Esc</button>
         </div>
+        
+        <!-- Debug panel (only visible in console) -->
+        <div style="display: none;">
+            <button onclick="debugBackendAudio()" id="debugBtn">🔍 Debug Backend</button>
+            <button onclick="debugWebRTCAudio()" id="webrtcBtn">🎤 Test WebRTC</button>
+        </div>
     </div>
 
     <script>
         const BACKEND_URL = 'http://127.0.0.1:8000';
         let bars = [];
         let audioLevelInterval = null;
-        let isProcessing = false;
         let waveAnimationInterval = null;
+        
+        // State management
+        let currentState = 'idle'; // 'idle', 'recording', 'processing'
+        let isRecording = false;
+        
+        // Audio visualizer implementation - completely rewritten
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let dataArray = null;
+        let useWebRTC = false; // Fallback method
 
         // Initialize visualizer bars
         function initVisualizer() {
@@ -205,18 +221,111 @@
             }
         }
 
-        // Poll backend for audio levels
-        async function pollAudioLevels() {
+        // NEW: Test backend audio level endpoint
+        async function testBackendAudioLevel() {
+            console.log('🔍 Testing backend audio level endpoint...');
             try {
                 const response = await fetch(`${BACKEND_URL}/audio_level`);
                 if (response.ok) {
                     const data = await response.json();
-                    const level = data.level || 0;
-                    updateVisualizerFromLevel(level);
+                    console.log('📊 Backend audio level response:', data);
+                    return data;
+                } else {
+                    console.error('❌ Backend audio level failed:', response.status);
+                    return null;
                 }
             } catch (error) {
-                // Backend might not be recording yet, that's ok
+                console.error('❌ Backend audio level error:', error);
+                return null;
             }
+        }
+
+        // NEW: Initialize WebRTC audio visualizer (fallback)
+        async function initWebRTCAudio() {
+            console.log('🎤 Initializing WebRTC audio...');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    } 
+                });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                analyser.fftSize = 256;
+                analyser.smoothingTimeConstant = 0.8;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                microphone.connect(analyser);
+                
+                console.log('✅ WebRTC audio initialized');
+                return true;
+            } catch (error) {
+                console.error('❌ WebRTC audio failed:', error);
+                return false;
+            }
+        }
+
+        // NEW: Get audio level from WebRTC
+        function getWebRTCAudioLevel() {
+            if (!analyser || !dataArray) return 0;
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate average amplitude
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            
+            // Normalize to 0-1
+            return average / 255;
+        }
+
+        // Poll backend for audio levels (improved)
+        async function pollAudioLevels() {
+            if (currentState !== 'recording') {
+                return; // Only poll when recording
+            }
+
+            let level = 0;
+
+            if (useWebRTC) {
+                // Use WebRTC fallback
+                level = getWebRTCAudioLevel();
+                console.log(`🎤 WebRTC audio level: ${level.toFixed(3)}`);
+            } else {
+                // Try backend first
+                try {
+                    const response = await fetch(`${BACKEND_URL}/audio_level`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        level = data.level || 0;
+                        
+                        // Log occasionally to verify it's working
+                        if (Math.random() < 0.1) { // 10% of the time for better debugging
+                            console.log(`🎙️ Backend audio level: ${level.toFixed(3)}, recording: ${data.recording}, queue: ${data.queue_size}`);
+                        }
+                    } else {
+                        console.warn('⚠️ Backend audio level failed, switching to WebRTC fallback');
+                        useWebRTC = true;
+                        await initWebRTCAudio();
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Backend not responding, switching to WebRTC fallback');
+                    useWebRTC = true;
+                    await initWebRTCAudio();
+                    return;
+                }
+            }
+            
+            updateVisualizerFromLevel(level);
         }
 
         // Update visualizer from audio level
@@ -230,31 +339,76 @@
             });
         }
 
-        // Start monitoring
-        function startMonitoring() {
-            if (!audioLevelInterval) {
-                audioLevelInterval = setInterval(pollAudioLevels, 100);
-            }
+        // State management functions
+        async function setState(newState) {
+            console.log(`🔄 State change: ${currentState} → ${newState}`);
+            currentState = newState;
+            await updateUI();
         }
 
-        // Stop monitoring
-        function stopMonitoring() {
+        async function updateUI() {
+            // Clear all animations first
             if (audioLevelInterval) {
                 clearInterval(audioLevelInterval);
                 audioLevelInterval = null;
             }
+            if (waveAnimationInterval) {
+                clearInterval(waveAnimationInterval);
+                waveAnimationInterval = null;
+            }
+            
+            // Stop WebRTC if switching away from recording
+            if (currentState !== 'recording' && audioContext) {
+                try {
+                    audioContext.close();
+                    audioContext = null;
+                    analyser = null;
+                    microphone = null;
+                    dataArray = null;
+                    useWebRTC = false;
+                    console.log('🔇 WebRTC audio stopped');
+                } catch (e) {
+                    console.warn('WebRTC cleanup error:', e);
+                }
+            }
+
+            switch (currentState) {
+                case 'recording':
+                    document.getElementById('statusText').textContent = 'Recording...';
+                    await startAudioVisualizer();
+                    break;
+                case 'processing':
+                    document.getElementById('statusText').textContent = 'Processing...';
+                    startProcessingAnimation();
+                    break;
+                case 'idle':
+                default:
+                    document.getElementById('statusText').textContent = 'Ready...';
+                    resetBars();
+                    break;
+            }
         }
 
-        // Show processing state
-        function showProcessing() {
-            isProcessing = true;
-            stopMonitoring(); // Stop audio monitoring
-            document.getElementById('statusText').textContent = 'Processing...';
+        async function startAudioVisualizer() {
+            console.log('🎤 Starting audio visualizer');
+            
+            // Test backend first
+            const backendTest = await testBackendAudioLevel();
+            if (backendTest && backendTest.recording === false) {
+                console.log('📊 Backend is available but not recording yet, this is expected');
+            } else if (!backendTest) {
+                console.log('⚠️ Backend not available, will try WebRTC fallback when needed');
+            }
+            
+            // Start polling
+            audioLevelInterval = setInterval(pollAudioLevels, 100);
+        }
 
-            // Animate bars with moving wave
+        function startProcessingAnimation() {
+            console.log('🌊 Starting processing animation');
             let waveOffset = 0;
             waveAnimationInterval = setInterval(() => {
-                if (!isProcessing) {
+                if (currentState !== 'processing') {
                     clearInterval(waveAnimationInterval);
                     waveAnimationInterval = null;
                     return;
@@ -268,11 +422,24 @@
             }, 50);
         }
 
+        function resetBars() {
+            bars.forEach(bar => {
+                bar.style.height = '3px';
+            });
+        }
+
+        // Show processing state (called by Rust)
+        function showProcessing() {
+            console.log('🌊 SHOWING PROCESSING ANIMATION (called by Rust)');
+            setState('processing');
+        }
+
         // Stop and transcribe
         async function stopRecording() {
             console.log('🛑 Stop button clicked');
-            stopMonitoring();
-            showProcessing();
+            setState('processing');
+
+            let transcribedText = null;
 
             try {
                 const response = await fetch(`${BACKEND_URL}/stop`, { method: 'POST' });
@@ -280,25 +447,33 @@
 
                 if (data.status === 'success' && data.text) {
                     console.log('✅ Transcription:', data.text);
-
-                    // Inject text
-                    const { invoke } = window.__TAURI_INTERNALS__;
-                    await invoke('inject_text_directly', { text: data.text });
+                    transcribedText = data.text;
                 }
             } catch (error) {
                 console.error('❌ Stop error:', error);
             }
 
-            // Reset state and hide window
-            isProcessing = false;
-            if (waveAnimationInterval) {
-                clearInterval(waveAnimationInterval);
-                waveAnimationInterval = null;
-            }
-
-            const { webviewWindow } = window.__TAURI_INTERNALS__;
+            // Hide window FIRST (to restore focus)
+            const { webviewWindow, invoke } = window.__TAURI_INTERNALS__;
             await webviewWindow.getCurrent().hide();
             console.log('✅ Window hidden');
+
+            // Wait for focus to return to text field
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            // THEN inject text (always inject, clipboard setting controls saving)
+            if (transcribedText) {
+                try {
+                    const saveToClipboard = await invoke('get_clipboard_paste');
+                    console.log(`📋 Injecting text (save to clipboard: ${saveToClipboard})`);
+                    await invoke('inject_text_directly', { 
+                        text: transcribedText,
+                        saveToClipboard: saveToClipboard 
+                    });
+                } catch (error) {
+                    console.error('❌ Injection error:', error);
+                }
+            }
         }
 
         // Cancel recording
@@ -311,14 +486,7 @@
                 console.error('❌ Cancel error:', error);
             }
 
-            // Reset state and hide window
-            isProcessing = false;
-            stopMonitoring();
-            if (waveAnimationInterval) {
-                clearInterval(waveAnimationInterval);
-                waveAnimationInterval = null;
-            }
-
+            // Hide window
             const { webviewWindow } = window.__TAURI_INTERNALS__;
             await webviewWindow.getCurrent().hide();
             console.log('✅ Window hidden');
@@ -353,26 +521,62 @@
         // Reset to recording state
         function resetToRecording() {
             console.log('🔄 Resetting to recording state');
-            isProcessing = false;
-            if (waveAnimationInterval) {
-                clearInterval(waveAnimationInterval);
-                waveAnimationInterval = null;
-            }
-            document.getElementById('statusText').textContent = 'Recording...';
-            // Reset bars to minimum
-            bars.forEach(bar => {
-                bar.style.height = '3px';
-            });
-            startMonitoring();
-            console.log('✅ Recording state reset complete');
+            setState('recording');
         }
+
+        // Debug functions (accessible from console)
+        window.debugBackendAudio = async function() {
+            console.log('🔍 === BACKEND AUDIO DEBUG ===');
+            
+            // Test health endpoint
+            try {
+                const health = await fetch(`${BACKEND_URL}/health`);
+                const healthData = await health.json();
+                console.log('🏥 Backend health:', healthData);
+            } catch (e) {
+                console.error('❌ Backend health failed:', e);
+            }
+            
+            // Test audio level endpoint
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(`${BACKEND_URL}/audio_level`);
+                    const data = await response.json();
+                    console.log(`📊 Audio level ${i+1}:`, data);
+                } catch (e) {
+                    console.error(`❌ Audio level ${i+1} failed:`, e);
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        };
+        
+        window.debugWebRTCAudio = async function() {
+            console.log('🎤 === WEBRTC AUDIO DEBUG ===');
+            
+            const success = await initWebRTCAudio();
+            if (success) {
+                console.log('✅ WebRTC initialized, testing for 5 seconds...');
+                for (let i = 0; i < 50; i++) {
+                    const level = getWebRTCAudioLevel();
+                    if (i % 10 === 0) {
+                        console.log(`🎤 WebRTC level ${i/10 + 1}:`, level.toFixed(3));
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        };
 
         // Initialize on load
         initVisualizer();
         console.log('✅ Recording window loaded');
+        console.log('✅ Visualizer initialized with', bars.length, 'bars');
+        console.log('🔧 Debug commands available:');
+        console.log('   debugBackendAudio() - Test backend audio endpoint');
+        console.log('   debugWebRTCAudio() - Test WebRTC audio fallback');
 
         // Track previous visibility state
         let wasVisible = false;
+        let isFirstShow = true;
 
         // Poll visibility to start/stop monitoring
         setInterval(async () => {
@@ -382,17 +586,24 @@
 
             // Window just became visible
             if (isVisible && !wasVisible) {
-                console.log('Window became visible - resetting to recording state');
+                console.log('📺 Window became visible - resetting to recording state');
+                if (isFirstShow) {
+                    console.log('🌟 First show detected');
+                    isFirstShow = false;
+                }
+                // Small delay to ensure window is fully shown
+                setTimeout(() => {
                 resetToRecording();
+                }, 100);
             }
             // Window just became hidden
             else if (!isVisible && wasVisible) {
-                console.log('Window hidden - stopping monitoring');
-                stopMonitoring();
+                console.log('🙈 Window hidden - setting to idle state');
+                setState('idle');
             }
 
             wasVisible = isVisible;
-        }, 500);
+        }, 300);  // Check more frequently (every 300ms instead of 500ms)
     </script>
 </body>
 </html>

@@ -328,3 +328,4 @@ cargo-tauri build --no-bundle
 
 **Ready to go! Press Alt+T and start dictating!** 🎤
 
+

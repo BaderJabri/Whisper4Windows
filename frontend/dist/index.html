@@ -217,6 +217,16 @@
                     Auto: Tries GPU first, falls back to CPU if needed
                 </small>
             </div>
+
+            <div style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
+                <label style="font-size: 13px; font-weight: 600; color: #444; display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="clipboardPasteToggle" checked onchange="toggleClipboardPaste()" style="width: 18px; height: 18px; margin-right: 10px; cursor: pointer;">
+                    <span>📋 Save transcribed text to clipboard</span>
+                </label>
+                <small style="display: block; margin-top: 6px; margin-left: 28px; color: #666; font-size: 11px;">
+                    Text is always injected into the active text field. When this is enabled, the text also stays in your clipboard for you to paste elsewhere. When disabled, your original clipboard content is preserved.
+                </small>
+            </div>
             
             <div class="button-group">
                 <button id="liveStartBtn" onclick="startLiveRecording()" style="background: #28a745;">▶️ START Recording</button>
@@ -265,6 +275,7 @@
 
         // Device selection
         let selectedDevice = 'auto';
+        let clipboardPasteEnabled = true;
         
         function selectDevice(device) {
             selectedDevice = device;
@@ -296,6 +307,20 @@
             
             // Save to backend state
             saveSettings();
+        }
+
+        // Toggle clipboard paste setting
+        async function toggleClipboardPaste() {
+            const toggle = document.getElementById('clipboardPasteToggle');
+            clipboardPasteEnabled = toggle.checked;
+            
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_clipboard_paste', { enabled: clipboardPasteEnabled });
+                console.log(`✅ Clipboard paste ${clipboardPasteEnabled ? 'enabled' : 'disabled'}`);
+            } catch (error) {
+                console.error('❌ Error setting clipboard paste:', error);
+            }
         }
         
         // Save current settings to backend
@@ -457,7 +482,7 @@
         }
 
         // Initialize on load
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             console.log('🚀 Whisper4Windows UI Loaded');
             
             // Listen for global hotkey events from Tauri
@@ -476,6 +501,17 @@
                 
                 console.log('✅ Hotkey listeners registered');
                 console.log('💡 Press Alt+T to start/stop recording from anywhere!');
+            }
+            
+            // Load clipboard paste setting
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const enabled = await invoke('get_clipboard_paste');
+                clipboardPasteEnabled = enabled;
+                document.getElementById('clipboardPasteToggle').checked = enabled;
+                console.log(`📋 Loaded clipboard paste setting: ${enabled}`);
+            } catch (error) {
+                console.error('❌ Error loading clipboard paste setting:', error);
             }
             
             // Check backend status on load

@@ -292,7 +292,7 @@ pub fn run() {
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
                 .title("Recording")
-                .inner_size(500.0, 120.0)
+                .inner_size(640.0, 200.0)
                 .resizable(false)
                 .center()
                 .always_on_top(true)

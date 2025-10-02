@@ -18,51 +18,98 @@
         }
 
         .container {
-            background: #2a2a2a;
-            border-radius: 16px;
-            padding: 24px;
-            width: 500px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            border: 1px solid #3a3a3a;
+            background: #1a1a1a;
+            border-radius: 20px;
+            padding: 20px 24px;
+            width: 600px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            border: 1px solid #2a2a2a;
         }
 
-        .status {
+        .top-section {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .recording-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .dot {
-            width: 12px;
-            height: 12px;
-            background: #4a9eff;
+            width: 10px;
+            height: 10px;
+            background: #3b82f6;
             border-radius: 50%;
             animation: pulse 1.5s ease-in-out infinite;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.85); }
+            50% { opacity: 0.5; transform: scale(0.9); }
         }
 
-        .text {
+        .model-selector {
+            position: relative;
+            flex: 1;
+        }
+
+        .model-dropdown {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 8px 12px;
             color: #e0e0e0;
-            font-size: 16px;
-            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .model-dropdown:hover {
+            background: #333;
+            border-color: #4a4a4a;
+        }
+
+        .model-dropdown:focus {
+            border-color: #3b82f6;
+        }
+
+        .visualizer-container {
+            background: #0a0a0a;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+        }
+
+        .visualizer-bar {
+            width: 4px;
+            background: linear-gradient(to top, #3b82f6, #60a5fa);
+            border-radius: 2px;
+            transition: height 0.1s ease;
+            height: 4px;
+            min-height: 4px;
         }
 
         .buttons {
             display: flex;
             gap: 12px;
-            margin-top: 16px;
         }
 
         button {
             flex: 1;
             padding: 12px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
@@ -70,45 +117,123 @@
         }
 
         .stop-btn {
-            background: #4a9eff;
+            background: #3b82f6;
             color: white;
         }
 
         .stop-btn:hover {
-            background: #3a8eef;
+            background: #2563eb;
         }
 
         .cancel-btn {
-            background: #3a3a3a;
+            background: #2a2a2a;
             color: #999;
-            border: 1px solid #4a4a4a;
+            border: 1px solid #3a3a3a;
         }
 
         .cancel-btn:hover {
-            background: #404040;
-            border-color: #5a5a5a;
+            background: #333;
+            border-color: #4a4a4a;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="status">
-            <div class="dot"></div>
-            <div class="text" id="status">Recording...</div>
+        <div class="top-section">
+            <div class="recording-indicator">
+                <div class="dot"></div>
+            </div>
+            <div class="model-selector">
+                <select class="model-dropdown" id="modelSelect">
+                    <option value="tiny">Tiny (Fastest)</option>
+                    <option value="base">Base (Fast)</option>
+                    <option value="small" selected>Small (Balanced)</option>
+                    <option value="medium">Medium (Accurate)</option>
+                    <option value="large-v3">Large V3 (Best)</option>
+                </select>
+            </div>
+        </div>
+        <div class="visualizer-container" id="visualizer">
+            <!-- Bars will be created dynamically -->
         </div>
         <div class="buttons">
-            <button class="stop-btn" onclick="stopRecording()">Stop (F9)</button>
-            <button class="cancel-btn" onclick="cancelRecording()">Cancel (Esc)</button>
+            <button class="stop-btn" onclick="stopRecording()">Stop</button>
+            <button class="cancel-btn" onclick="cancelRecording()">Cancel</button>
         </div>
     </div>
 
     <script>
         const BACKEND_URL = 'http://127.0.0.1:8000';
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationId = null;
+        let bars = [];
+
+        // Initialize visualizer bars
+        function initVisualizer() {
+            const visualizer = document.getElementById('visualizer');
+            const barCount = 60;
+
+            for (let i = 0; i < barCount; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'visualizer-bar';
+                visualizer.appendChild(bar);
+                bars.push(bar);
+            }
+        }
+
+        // Start audio monitoring
+        async function startAudioMonitoring() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+
+                analyser.fftSize = 128;
+                microphone.connect(analyser);
+
+                updateVisualizer();
+                console.log('✅ Audio monitoring started');
+            } catch (error) {
+                console.error('❌ Audio monitoring error:', error);
+            }
+        }
+
+        // Update visualizer animation
+        function updateVisualizer() {
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            analyser.getByteFrequencyData(dataArray);
+
+            // Update each bar
+            bars.forEach((bar, index) => {
+                const dataIndex = Math.floor(index * dataArray.length / bars.length);
+                const value = dataArray[dataIndex];
+                const height = Math.max(4, (value / 255) * 60);
+                bar.style.height = `${height}px`;
+            });
+
+            animationId = requestAnimationFrame(updateVisualizer);
+        }
+
+        // Stop audio monitoring
+        function stopAudioMonitoring() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            if (microphone) {
+                microphone.disconnect();
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+        }
 
         // Stop and transcribe
         async function stopRecording() {
             console.log('🛑 Stop button clicked');
-            document.getElementById('status').textContent = 'Processing...';
+            stopAudioMonitoring();
 
             try {
                 const response = await fetch(`${BACKEND_URL}/stop`, { method: 'POST' });
@@ -134,6 +259,7 @@
         // Cancel recording
         async function cancelRecording() {
             console.log('❌ Cancel button clicked');
+            stopAudioMonitoring();
 
             try {
                 await fetch(`${BACKEND_URL}/cancel`, { method: 'POST' });
@@ -147,6 +273,24 @@
             console.log('✅ Window hidden');
         }
 
+        // Model selection handler
+        document.getElementById('modelSelect').addEventListener('change', async (e) => {
+            const model = e.target.value;
+            console.log('📝 Model selected:', model);
+
+            // Send to backend via Tauri command
+            const { invoke } = window.__TAURI_INTERNALS__;
+            try {
+                await invoke('set_model_and_device', {
+                    model: model,
+                    device: 'auto'
+                });
+                console.log('✅ Model updated');
+            } catch (error) {
+                console.error('❌ Model update error:', error);
+            }
+        });
+
         // Escape key cancels
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -155,7 +299,33 @@
             }
         });
 
+        // Initialize on load
+        initVisualizer();
         console.log('✅ Recording window loaded');
+
+        // Check if window is visible and start monitoring
+        async function checkAndStartMonitoring() {
+            const { webviewWindow } = window.__TAURI_INTERNALS__;
+            const currentWindow = webviewWindow.getCurrent();
+            const isVisible = await currentWindow.isVisible();
+
+            if (isVisible && !audioContext) {
+                await startAudioMonitoring();
+            }
+        }
+
+        // Poll visibility every 500ms to start/stop monitoring
+        setInterval(async () => {
+            const { webviewWindow } = window.__TAURI_INTERNALS__;
+            const currentWindow = webviewWindow.getCurrent();
+            const isVisible = await currentWindow.isVisible();
+
+            if (isVisible && !audioContext) {
+                await startAudioMonitoring();
+            } else if (!isVisible && audioContext) {
+                stopAudioMonitoring();
+            }
+        }, 500);
     </script>
 </body>
 </html>

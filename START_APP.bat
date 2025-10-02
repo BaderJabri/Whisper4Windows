@@ -9,9 +9,9 @@ echo [1/2] Starting Python Backend...
 start "Whisper4Windows Backend" powershell -NoExit -Command "$env:PATH += ';%~dp0backend\venv\Lib\site-packages\nvidia\cublas\bin;%~dp0backend\venv\Lib\site-packages\nvidia\cudnn\bin;C:\Program Files\NVIDIA\CUDNN\v9.13\bin\13.0'; cd '%~dp0backend'; .\venv\Scripts\Activate.ps1; python main.py"
 timeout /t 3 /nobreak >nul
 
-REM Start Frontend
+REM Start Frontend (with console for logging)
 echo [2/2] Starting Frontend App...
-start "" "%~dp0frontend\src-tauri\target\release\app.exe"
+start "Whisper4Windows Frontend" cmd /k "%~dp0frontend\src-tauri\target\release\app.exe"
 
 echo.
 echo ========================================

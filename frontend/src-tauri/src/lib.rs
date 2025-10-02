@@ -130,10 +130,22 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     let model = state.selected_model.lock().await.clone();
     let device = state.selected_device.lock().await.clone();
 
-    // Show window
+    // Position window at top center and show
     if let Some(win) = app.get_webview_window("recording") {
+        // Get primary monitor to calculate center position
+        if let Some(monitor) = win.current_monitor().map_err(|e| e.to_string())? {
+            let screen_size = monitor.size();
+            let window_size = win.outer_size().map_err(|e| e.to_string())?;
+
+            // Calculate centered X position, top Y position (50px from top)
+            let x = (screen_size.width as i32 - window_size.width as i32) / 2;
+            let y = 50;
+
+            win.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+        }
+
         win.show().map_err(|e| e.to_string())?;
-        log::info!("✅ Window shown");
+        log::info!("✅ Window shown at top center");
     }
 
     // Call backend /start
@@ -292,9 +304,9 @@ pub fn run() {
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
                 .title("Recording")
-                .inner_size(1200.0, 140.0)
+                .inner_size(616.0, 140.0)
                 .resizable(false)
-                .center()
+                .position(0.0, 50.0)  // Will be centered horizontally when shown
                 .always_on_top(true)
                 .visible(false)
                 .skip_taskbar(true)

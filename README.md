@@ -8,13 +8,15 @@ A free, local, GPU-accelerated speech-to-text app inspired by Superwhisper. Reco
 
 ## ✨ Features
 
-- **🔥 Global Hotkey (Alt+T)** - Record from anywhere, no need to switch windows
-- **🎨 Minimal Recording UI** - Sleek dark interface with live audio visualization
+- **🔥 Global Hotkey (F9)** - Record from anywhere, no need to switch windows
+- **🎨 Minimal Recording UI** - Sleek dark interface positioned at top center
 - **⚡ GPU Acceleration** - 10x faster transcription with NVIDIA GPU
-- **🎯 Auto Text Injection** - Text types directly into any app
+- **🎯 Auto Text Injection** - Text pastes directly into any app via clipboard
 - **🔒 100% Local & Private** - No internet required, your data never leaves
-- **📊 Live Visualizer** - Real-time audio feedback during recording
-- **⚙️ Flexible** - Choose CPU/GPU, multiple model sizes
+- **📊 Live Visualizer** - Real-time audio feedback from backend audio stream
+- **🌊 Processing Animation** - Smooth wave animation during transcription
+- **⚙️ Flexible** - Choose CPU/GPU, multiple model sizes in-window
+- **⌨️ Esc to Cancel** - Global Esc hotkey cancels recording anytime
 
 ---
 
@@ -32,10 +34,10 @@ START_APP.bat
 ### **2. Use the Global Hotkey (Recommended)**
 
 1. Open any text editor (Notepad, Word, etc.)
-2. Press **Alt+X** - A minimal recording window appears
+2. Press **F9** - A minimal recording window appears at top center
 3. Speak your text (watch the live visualizer respond!)
-4. Press **Alt+X** again
-5. Text appears automatically in your app!
+4. Press **F9** again - Window shows processing animation, then text appears
+5. Press **Esc** anytime to cancel recording
 
 ### **3. Configure Settings**
 
@@ -108,16 +110,16 @@ Whisper4Windows/
 ### **Global Hotkey Workflow (Recommended)**
 
 ```
-Type in Word → Press Alt+T → Recording window appears → Speak → Press Alt+T → Text appears!
+Type in Word → Press F9 → Recording window appears → Speak → Press F9 → Processing animation → Text appears!
 ```
 
-The minimal recording window shows:
+The minimal recording window (616×140, top center) shows:
 
-- ✅ Live audio visualizer (50 animated bars)
-- ✅ Recording status with animated indicator
-- ✅ Model selector dropdown
-- ✅ Device indicator (Auto/GPU/CPU)
-- ✅ Stop button (Alt+T) and Cancel button (Esc)
+- ✅ Live audio visualizer (80 animated bars from backend audio stream)
+- ✅ Recording status with animated blue dot
+- ✅ Model selector dropdown (Tiny/Base/Small/Medium/Large)
+- ✅ Stop button (F9) and Cancel button (Esc)
+- ✅ Wave loading animation during transcription
 
 ### **Settings Window**
 
@@ -204,12 +206,16 @@ python main.py
 ## 🎯 Roadmap
 
 - [X] GPU acceleration
-- [X] Global hotkey (Alt+T)
-- [X] Auto text injection
+- [X] Global hotkey (F9) with press-only detection
+- [X] Auto text injection via clipboard paste
 - [X] System tray integration
-- [X] Device selector (Auto/GPU/CPU)
-- [X] Minimal recording UI with live visualizer
-- [X] Cancel recording feature (Esc)
+- [X] In-window model selector
+- [X] Minimal recording UI (616×140, top center)
+- [X] Live visualizer from backend audio stream
+- [X] Cancel recording with global Esc hotkey
+- [X] Wave loading animation during processing
+- [X] State management with auto-reset
+- [X] Backend audio level endpoint
 - [ ] Custom hotkey configuration
 - [ ] Multiple language support
 - [ ] Post-processing presets
@@ -239,9 +245,14 @@ MIT License - Free to use and modify
 
 1. Double-click `START_APP.bat`
 2. Open Notepad
-3. Press **Alt+T**
+3. Press **F9** - Recording window appears at top
 4. Say "Testing Whisper for Windows"
-5. Press **Alt+T**
-6. Watch text appear! ✨
+5. Press **F9** - Watch the wave animation process
+6. Text appears in Notepad! ✨
 
 **That's it!** Enjoy your local, private, GPU-accelerated dictation! 🎤
+
+**Tips:**
+- Press **Esc** during recording to cancel
+- Change model in the recording window dropdown
+- Check tray icon for main settings

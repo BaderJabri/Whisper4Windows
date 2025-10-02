@@ -26,8 +26,7 @@
             background: #1a1a1a;
             border-radius: 16px;
             padding: 16px 20px;
-            width: 100%;
-            max-width: 1200px;
+            width: 616px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
             border: 1px solid #2a2a2a;
         }
@@ -191,11 +190,12 @@
         let bars = [];
         let audioLevelInterval = null;
         let isProcessing = false;
+        let waveAnimationInterval = null;
 
         // Initialize visualizer bars
         function initVisualizer() {
             const visualizer = document.getElementById('visualizer');
-            const barCount = 100;
+            const barCount = 80;  // Reduced for narrower window
 
             for (let i = 0; i < barCount; i++) {
                 const bar = document.createElement('div');
@@ -248,22 +248,23 @@
         // Show processing state
         function showProcessing() {
             isProcessing = true;
+            stopMonitoring(); // Stop audio monitoring
             document.getElementById('statusText').textContent = 'Processing...';
-            document.getElementById('visualizer').classList.add('loading');
 
-            // Animate bars with wave
+            // Animate bars with moving wave
             let waveOffset = 0;
-            const waveInterval = setInterval(() => {
+            waveAnimationInterval = setInterval(() => {
                 if (!isProcessing) {
-                    clearInterval(waveInterval);
+                    clearInterval(waveAnimationInterval);
+                    waveAnimationInterval = null;
                     return;
                 }
                 bars.forEach((bar, index) => {
                     const delay = (index / bars.length) * Math.PI * 2;
-                    const height = 3 + Math.sin(waveOffset + delay) * 15 + 15;
+                    const height = 10 + Math.sin(waveOffset + delay) * 12 + 12;
                     bar.style.height = `${height}px`;
                 });
-                waveOffset += 0.1;
+                waveOffset += 0.15;
             }, 50);
         }
 
@@ -288,8 +289,13 @@
                 console.error('❌ Stop error:', error);
             }
 
-            // Hide window
+            // Reset state and hide window
             isProcessing = false;
+            if (waveAnimationInterval) {
+                clearInterval(waveAnimationInterval);
+                waveAnimationInterval = null;
+            }
+
             const { webviewWindow } = window.__TAURI_INTERNALS__;
             await webviewWindow.getCurrent().hide();
             console.log('✅ Window hidden');
@@ -298,7 +304,6 @@
         // Cancel recording
         async function cancelRecording() {
             console.log('❌ Cancel button clicked');
-            stopMonitoring();
 
             try {
                 await fetch(`${BACKEND_URL}/cancel`, { method: 'POST' });
@@ -306,7 +311,14 @@
                 console.error('❌ Cancel error:', error);
             }
 
-            // Hide window
+            // Reset state and hide window
+            isProcessing = false;
+            stopMonitoring();
+            if (waveAnimationInterval) {
+                clearInterval(waveAnimationInterval);
+                waveAnimationInterval = null;
+            }
+
             const { webviewWindow } = window.__TAURI_INTERNALS__;
             await webviewWindow.getCurrent().hide();
             console.log('✅ Window hidden');
@@ -338,9 +350,29 @@
             }
         });
 
+        // Reset to recording state
+        function resetToRecording() {
+            console.log('🔄 Resetting to recording state');
+            isProcessing = false;
+            if (waveAnimationInterval) {
+                clearInterval(waveAnimationInterval);
+                waveAnimationInterval = null;
+            }
+            document.getElementById('statusText').textContent = 'Recording...';
+            // Reset bars to minimum
+            bars.forEach(bar => {
+                bar.style.height = '3px';
+            });
+            startMonitoring();
+            console.log('✅ Recording state reset complete');
+        }
+
         // Initialize on load
         initVisualizer();
         console.log('✅ Recording window loaded');
+
+        // Track previous visibility state
+        let wasVisible = false;
 
         // Poll visibility to start/stop monitoring
         setInterval(async () => {
@@ -348,12 +380,18 @@
             const currentWindow = webviewWindow.getCurrent();
             const isVisible = await currentWindow.isVisible();
 
-            if (isVisible && !audioLevelInterval && !isProcessing) {
-                startMonitoring();
-                document.getElementById('statusText').textContent = 'Recording...';
-            } else if (!isVisible && audioLevelInterval) {
+            // Window just became visible
+            if (isVisible && !wasVisible) {
+                console.log('Window became visible - resetting to recording state');
+                resetToRecording();
+            }
+            // Window just became hidden
+            else if (!isVisible && wasVisible) {
+                console.log('Window hidden - stopping monitoring');
                 stopMonitoring();
             }
+
+            wasVisible = isVisible;
         }, 500);
     </script>
 </body>

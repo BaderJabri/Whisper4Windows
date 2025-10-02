@@ -265,31 +265,85 @@ async def stop_recording():
 async def cancel_recording():
     """Cancel recording without transcribing"""
     global is_recording, audio_capture
-    
+
     try:
         if not is_recording:
             return {"status": "error", "message": "Not recording"}
-        
+
         logger.info("❌ Canceling recording...")
-        
+
         # Stop recording flag
         is_recording = False
-        
+
         # Stop audio capture without transcribing
         if audio_capture:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, audio_capture.stop_recording)
-        
+
         logger.info("✅ Recording canceled")
-        
+
         return {
             "status": "success",
             "message": "Recording canceled"
         }
-        
+
     except Exception as e:
         logger.error(f"❌ Failed to cancel: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/audio_level")
+async def get_audio_level():
+    """Get current audio input level (0.0 to 1.0)"""
+    global is_recording, audio_capture
+
+    try:
+        if not is_recording or not audio_capture:
+            return {"level": 0.0, "recording": False}
+
+        # Peek at recent audio without removing from queue
+        if audio_capture.audio_queue.empty():
+            return {"level": 0.0, "recording": True}
+
+        # Get queue size to know how much audio we have
+        queue_size = audio_capture.audio_queue.qsize()
+
+        # Sample a few recent chunks to calculate level
+        chunks = []
+        temp_chunks = []
+
+        # Get up to 5 most recent chunks
+        for _ in range(min(5, queue_size)):
+            try:
+                chunk = audio_capture.audio_queue.get_nowait()
+                temp_chunks.append(chunk)
+                chunks.append(chunk)
+            except:
+                break
+
+        # Put them back in the queue
+        for chunk in temp_chunks:
+            audio_capture.audio_queue.put(chunk)
+
+        if not chunks:
+            return {"level": 0.0, "recording": True}
+
+        # Calculate RMS level
+        audio_data = np.concatenate(chunks, axis=0)
+        rms = np.sqrt(np.mean(audio_data ** 2))
+
+        # Normalize to 0-1 range (typical speech is around 0.1-0.3 RMS)
+        normalized_level = min(1.0, rms * 3.0)
+
+        return {
+            "level": float(normalized_level),
+            "recording": True,
+            "queue_size": queue_size
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting audio level: {e}")
+        return {"level": 0.0, "recording": False, "error": str(e)}
 
 
 # Removed /get_live_chunk endpoint - using simple record/stop flow now

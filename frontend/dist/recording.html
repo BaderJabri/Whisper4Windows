@@ -15,33 +15,39 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: transparent;
             overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
         }
 
         .container {
             background: #1a1a1a;
-            border-radius: 20px;
-            padding: 20px 24px;
-            width: 600px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            border-radius: 16px;
+            padding: 16px 20px;
+            width: 100%;
+            max-width: 1200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
             border: 1px solid #2a2a2a;
         }
 
         .top-section {
             display: flex;
             align-items: center;
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .recording-indicator {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             background: #3b82f6;
             border-radius: 50%;
             animation: pulse 1.5s ease-in-out infinite;
@@ -53,87 +59,104 @@
         }
 
         .model-selector {
-            position: relative;
             flex: 1;
         }
 
         .model-dropdown {
-            background: #2a2a2a;
+            background: transparent;
             border: 1px solid #3a3a3a;
-            border-radius: 8px;
-            padding: 8px 12px;
-            color: #e0e0e0;
-            font-size: 14px;
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: #999;
+            font-size: 12px;
             cursor: pointer;
-            width: 100%;
+            width: auto;
+            max-width: 180px;
             outline: none;
             transition: all 0.2s;
         }
 
         .model-dropdown:hover {
-            background: #333;
             border-color: #4a4a4a;
+            color: #bbb;
         }
 
         .model-dropdown:focus {
             border-color: #3b82f6;
         }
 
+        .status-text {
+            color: #666;
+            font-size: 11px;
+            margin-left: auto;
+        }
+
         .visualizer-container {
-            background: #0a0a0a;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            height: 80px;
+            background: transparent;
+            border-radius: 8px;
+            padding: 12px 0;
+            margin-bottom: 12px;
+            height: 60px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 3px;
+            gap: 2px;
         }
 
         .visualizer-bar {
-            width: 4px;
-            background: linear-gradient(to top, #3b82f6, #60a5fa);
-            border-radius: 2px;
-            transition: height 0.1s ease;
-            height: 4px;
-            min-height: 4px;
+            width: 3px;
+            background: #3b82f6;
+            border-radius: 1.5px;
+            transition: height 0.08s ease;
+            height: 3px;
+            min-height: 3px;
+        }
+
+        .loading .visualizer-bar {
+            animation: wave 1.2s ease-in-out infinite;
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 3px; }
+            50% { height: 30px; }
         }
 
         .buttons {
             display: flex;
-            gap: 12px;
+            gap: 16px;
+            justify-content: flex-end;
         }
 
         button {
-            flex: 1;
-            padding: 12px;
+            padding: 6px 16px;
             border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 500;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 400;
             cursor: pointer;
             transition: all 0.2s;
+            background: transparent;
+            color: #666;
+        }
+
+        button:hover {
+            color: #999;
         }
 
         .stop-btn {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .stop-btn:hover {
-            background: #2563eb;
-        }
-
-        .cancel-btn {
-            background: #2a2a2a;
-            color: #999;
             border: 1px solid #3a3a3a;
         }
 
-        .cancel-btn:hover {
-            background: #333;
+        .stop-btn:hover {
             border-color: #4a4a4a;
+        }
+
+        .cancel-btn {
+            border: 1px solid #2a2a2a;
+        }
+
+        .cancel-btn:hover {
+            border-color: #3a3a3a;
         }
     </style>
 </head>
@@ -145,35 +168,34 @@
             </div>
             <div class="model-selector">
                 <select class="model-dropdown" id="modelSelect">
-                    <option value="tiny">Tiny (Fastest)</option>
-                    <option value="base">Base (Fast)</option>
-                    <option value="small" selected>Small (Balanced)</option>
-                    <option value="medium">Medium (Accurate)</option>
-                    <option value="large-v3">Large V3 (Best)</option>
+                    <option value="tiny">Tiny</option>
+                    <option value="base">Base</option>
+                    <option value="small" selected>Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large-v3">Large</option>
                 </select>
             </div>
+            <div class="status-text" id="statusText">Recording...</div>
         </div>
         <div class="visualizer-container" id="visualizer">
             <!-- Bars will be created dynamically -->
         </div>
         <div class="buttons">
-            <button class="stop-btn" onclick="stopRecording()">Stop</button>
-            <button class="cancel-btn" onclick="cancelRecording()">Cancel</button>
+            <button class="stop-btn" onclick="stopRecording()">Stop   F9</button>
+            <button class="cancel-btn" onclick="cancelRecording()">Cancel   Esc</button>
         </div>
     </div>
 
     <script>
         const BACKEND_URL = 'http://127.0.0.1:8000';
-        let audioContext = null;
-        let analyser = null;
-        let microphone = null;
-        let animationId = null;
         let bars = [];
+        let audioLevelInterval = null;
+        let isProcessing = false;
 
         // Initialize visualizer bars
         function initVisualizer() {
             const visualizer = document.getElementById('visualizer');
-            const barCount = 60;
+            const barCount = 100;
 
             for (let i = 0; i < barCount; i++) {
                 const bar = document.createElement('div');
@@ -183,57 +205,73 @@
             }
         }
 
-        // Start audio monitoring
-        async function startAudioMonitoring() {
+        // Poll backend for audio levels
+        async function pollAudioLevels() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                microphone = audioContext.createMediaStreamSource(stream);
-
-                analyser.fftSize = 128;
-                microphone.connect(analyser);
-
-                updateVisualizer();
-                console.log('✅ Audio monitoring started');
+                const response = await fetch(`${BACKEND_URL}/audio_level`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const level = data.level || 0;
+                    updateVisualizerFromLevel(level);
+                }
             } catch (error) {
-                console.error('❌ Audio monitoring error:', error);
+                // Backend might not be recording yet, that's ok
             }
         }
 
-        // Update visualizer animation
-        function updateVisualizer() {
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            analyser.getByteFrequencyData(dataArray);
-
-            // Update each bar
+        // Update visualizer from audio level
+        function updateVisualizerFromLevel(level) {
             bars.forEach((bar, index) => {
-                const dataIndex = Math.floor(index * dataArray.length / bars.length);
-                const value = dataArray[dataIndex];
-                const height = Math.max(4, (value / 255) * 60);
+                // Create wave pattern based on level
+                const offset = (index / bars.length) * Math.PI * 4;
+                const wave = Math.sin(offset + Date.now() / 200) * 0.3 + 0.7;
+                const height = Math.max(3, level * 40 * wave);
                 bar.style.height = `${height}px`;
             });
-
-            animationId = requestAnimationFrame(updateVisualizer);
         }
 
-        // Stop audio monitoring
-        function stopAudioMonitoring() {
-            if (animationId) {
-                cancelAnimationFrame(animationId);
+        // Start monitoring
+        function startMonitoring() {
+            if (!audioLevelInterval) {
+                audioLevelInterval = setInterval(pollAudioLevels, 100);
             }
-            if (microphone) {
-                microphone.disconnect();
+        }
+
+        // Stop monitoring
+        function stopMonitoring() {
+            if (audioLevelInterval) {
+                clearInterval(audioLevelInterval);
+                audioLevelInterval = null;
             }
-            if (audioContext) {
-                audioContext.close();
-            }
+        }
+
+        // Show processing state
+        function showProcessing() {
+            isProcessing = true;
+            document.getElementById('statusText').textContent = 'Processing...';
+            document.getElementById('visualizer').classList.add('loading');
+
+            // Animate bars with wave
+            let waveOffset = 0;
+            const waveInterval = setInterval(() => {
+                if (!isProcessing) {
+                    clearInterval(waveInterval);
+                    return;
+                }
+                bars.forEach((bar, index) => {
+                    const delay = (index / bars.length) * Math.PI * 2;
+                    const height = 3 + Math.sin(waveOffset + delay) * 15 + 15;
+                    bar.style.height = `${height}px`;
+                });
+                waveOffset += 0.1;
+            }, 50);
         }
 
         // Stop and transcribe
         async function stopRecording() {
             console.log('🛑 Stop button clicked');
-            stopAudioMonitoring();
+            stopMonitoring();
+            showProcessing();
 
             try {
                 const response = await fetch(`${BACKEND_URL}/stop`, { method: 'POST' });
@@ -251,6 +289,7 @@
             }
 
             // Hide window
+            isProcessing = false;
             const { webviewWindow } = window.__TAURI_INTERNALS__;
             await webviewWindow.getCurrent().hide();
             console.log('✅ Window hidden');
@@ -259,7 +298,7 @@
         // Cancel recording
         async function cancelRecording() {
             console.log('❌ Cancel button clicked');
-            stopAudioMonitoring();
+            stopMonitoring();
 
             try {
                 await fetch(`${BACKEND_URL}/cancel`, { method: 'POST' });
@@ -303,27 +342,17 @@
         initVisualizer();
         console.log('✅ Recording window loaded');
 
-        // Check if window is visible and start monitoring
-        async function checkAndStartMonitoring() {
-            const { webviewWindow } = window.__TAURI_INTERNALS__;
-            const currentWindow = webviewWindow.getCurrent();
-            const isVisible = await currentWindow.isVisible();
-
-            if (isVisible && !audioContext) {
-                await startAudioMonitoring();
-            }
-        }
-
-        // Poll visibility every 500ms to start/stop monitoring
+        // Poll visibility to start/stop monitoring
         setInterval(async () => {
             const { webviewWindow } = window.__TAURI_INTERNALS__;
             const currentWindow = webviewWindow.getCurrent();
             const isVisible = await currentWindow.isVisible();
 
-            if (isVisible && !audioContext) {
-                await startAudioMonitoring();
-            } else if (!isVisible && audioContext) {
-                stopAudioMonitoring();
+            if (isVisible && !audioLevelInterval && !isProcessing) {
+                startMonitoring();
+                document.getElementById('statusText').textContent = 'Recording...';
+            } else if (!isVisible && audioLevelInterval) {
+                stopMonitoring();
             }
         }, 500);
     </script>

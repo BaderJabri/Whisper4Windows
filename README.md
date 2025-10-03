@@ -4,7 +4,7 @@
 
 A free, local, GPU-accelerated speech-to-text app inspired by Superwhisper. Record anywhere with a global hotkey, and text appears instantly - **no internet required, your data never leaves your device**.
 
-![Whisper4Windows Recording Overlay](image/README/1759288431699.png)
+![Whisper4Windows in Action](images/demo-google-search.png)
 
 ---
 
@@ -41,14 +41,17 @@ START_APP.bat
 4. Press **F9** again - Window shows processing animation, then text appears
 5. Press **Esc** anytime to cancel recording
 
-![Live Audio Visualization](image/README/1759288431699.png)
-*Real-time audio visualization with 80 animated bars - all processing happens locally on your device*
+![Processing Wave Animation](images/processing-wave-animation.png)
+*Smooth wave animation during transcription processing - all happens locally on your device*
 
 ### **3. Configure Settings**
 
 - Left-click system tray icon to open settings
 - Select model quality and processing device
 - Settings apply to all recordings
+
+![Settings Window](images/settings-window.png)
+*Configure model quality, processing device (GPU/CPU), and clipboard settings*
 
 ---
 

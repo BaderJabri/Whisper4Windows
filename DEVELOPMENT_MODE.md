@@ -196,3 +196,4 @@ cargo tauri dev # Try again
 5. **Iterate quickly**: Perfect your hardcoded visualizer
 
 Happy developing! 🚀
+

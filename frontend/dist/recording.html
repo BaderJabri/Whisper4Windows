@@ -188,6 +188,7 @@
         <div style="display: none;">
             <button onclick="debugBackendAudio()" id="debugBtn">🔍 Debug Backend</button>
             <button onclick="debugWebRTCAudio()" id="webrtcBtn">🎤 Test WebRTC</button>
+            <button onclick="testHardcodedVisualizer()" id="hardcodedBtn">🎨 Test Hardcoded</button>
         </div>
     </div>
 
@@ -200,7 +201,56 @@
         // State management
         let currentState = 'idle'; // 'idle', 'recording', 'processing'
         let isRecording = false;
-        
+
+        // Sound Effects - using Web Audio API
+        let soundEffectsEnabled = true;
+        let soundVolume = 0.8;
+
+        // Load sound settings from localStorage
+        try {
+            const savedSoundEffects = localStorage.getItem('soundEffects');
+            const savedVolume = localStorage.getItem('volume');
+            soundEffectsEnabled = savedSoundEffects !== 'false';
+            soundVolume = savedVolume ? parseInt(savedVolume) / 100 : 0.8;
+        } catch (e) {
+            console.warn('Could not load sound settings:', e);
+        }
+
+        function playBeep(frequency, duration) {
+            if (!soundEffectsEnabled) return;
+
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.frequency.value = frequency;
+                oscillator.type = 'sine';
+
+                const adjustedVolume = soundVolume * 0.3; // Max 30% volume
+                gainNode.gain.setValueAtTime(adjustedVolume, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + duration);
+
+                console.log(`🔊 Played ${frequency}Hz beep for ${duration}s at volume ${adjustedVolume.toFixed(2)}`);
+            } catch (error) {
+                console.error('❌ Error playing sound:', error);
+            }
+        }
+
+        function playStartSound() {
+            playBeep(800, 0.1); // Higher pitch, short beep
+        }
+
+        function playStopSound() {
+            playBeep(400, 0.15); // Lower pitch, slightly longer beep
+        }
+
         // Audio visualizer implementation - completely rewritten
         let audioContext = null;
         let analyser = null;
@@ -218,6 +268,66 @@
                 bar.className = 'visualizer-bar';
                 visualizer.appendChild(bar);
                 bars.push(bar);
+            }
+        }
+
+        // TEMPORARY: Hardcoded audio visualizer that simulates realistic audio levels
+        let hardcodedVisualizerInterval = null;
+        let hardcodedBaseLevel = 0;
+        let hardcodedVariation = 0;
+        
+        function startHardcodedVisualizer() {
+            console.log('🎨 Starting HARDCODED visualizer for debug');
+            
+            if (hardcodedVisualizerInterval) {
+                clearInterval(hardcodedVisualizerInterval);
+            }
+            
+            // Simulate realistic speech patterns
+            hardcodedBaseLevel = Math.random() * 0.3 + 0.1; // Base level between 0.1-0.4
+            hardcodedVariation = Math.random() * 0.15 + 0.05; // Variation between 0.05-0.2
+            
+            hardcodedVisualizerInterval = setInterval(() => {
+                if (currentState !== 'recording') {
+                    clearInterval(hardcodedVisualizerInterval);
+                    hardcodedVisualizerInterval = null;
+                    return;
+                }
+                
+                const time = Date.now() / 300; // Slower wave for speech-like patterns
+                
+                bars.forEach((bar, index) => {
+                    // Create speech-like peaks and valleys
+                    const baseWave = Math.sin(time + index * 0.1);
+                    
+                    // Add random spikes for speech bursts
+                    const speechSpike = Math.random() < 0.02 ? Math.random() * 0.4 : 0;
+                    
+                    // Create frequency-like distribution (lower bars move more)
+                    const positionFactor = (bars.length - index) / bars.length;
+                    
+                    // Calculate final level
+                    let level = hardcodedBaseLevel + (baseWave * hardcodedVariation * positionFactor) + speechSpike;
+                    
+                    // Occasionally add silences (speech pauses)
+                    if (Math.random() < 0.01) {
+                        level = 0.05; // Brief silence
+                    }
+                    
+                    // Clip to realistic range
+                    level = Math.max(0.05, Math.min(0.7, level));
+                    
+                    // Convert to bar height
+                    const height = Math.max(3, level * 45);
+                    bar.style.height = `${height}px`;
+                });
+            }, 80); // Update every 80ms for smooth animation
+        }
+        
+        function stopHardcodedVisualizer() {
+            if (hardcodedVisualizerInterval) {
+                clearInterval(hardcodedVisualizerInterval);
+                hardcodedVisualizerInterval = null;
             }
         }
 
@@ -357,6 +467,9 @@
                 waveAnimationInterval = null;
             }
             
+            // TEMPORARY: Stop hardcoded visualizer
+            stopHardcodedVisualizer();
+            
             // Stop WebRTC if switching away from recording
             if (currentState !== 'recording' && audioContext) {
                 try {
@@ -392,16 +505,21 @@
         async function startAudioVisualizer() {
             console.log('🎤 Starting audio visualizer');
             
-            // Test backend first
-            const backendTest = await testBackendAudioLevel();
-            if (backendTest && backendTest.recording === false) {
-                console.log('📊 Backend is available but not recording yet, this is expected');
-            } else if (!backendTest) {
-                console.log('⚠️ Backend not available, will try WebRTC fallback when needed');
-            }
+            // TEMPORARY: Always use hardcoded visualizer
+            console.log('🎨 TEMPORARY: Using hardcoded visualizer for debugging');
+            startHardcodedVisualizer();
             
-            // Start polling
-            audioLevelInterval = setInterval(pollAudioLevels, 100);
+            // TODO: Re-enable real audio polling when backend audio_level endpoint is fixed
+            // Test backend first
+            // const backendTest = await testBackendAudioLevel();
+            // if (backendTest && backendTest.recording === false) {
+            //     console.log('📊 Backend is available but not recording yet, this is expected');
+            // } else if (!backendTest) {
+            //     console.log('⚠️ Backend not available, will try WebRTC fallback when needed');
+            // }
+            // 
+            // // Start polling
+            // audioLevelInterval = setInterval(pollAudioLevels, 100);
         }
 
         function startProcessingAnimation() {
@@ -437,6 +555,7 @@
         // Stop and transcribe
         async function stopRecording() {
             console.log('🛑 Stop button clicked');
+            playStopSound(); // Play sound when stopping
             setState('processing');
 
             let transcribedText = null;
@@ -521,6 +640,7 @@
         // Reset to recording state
         function resetToRecording() {
             console.log('🔄 Resetting to recording state');
+            playStartSound(); // Play sound when recording starts
             setState('recording');
         }
 
@@ -565,12 +685,41 @@
                 }
             }
         };
+        
+        window.testHardcodedVisualizer = function() {
+            console.log('🎨 === HARDCODED VISUALIZER DEBUG ===');
+            
+            // Set to recording state temporarily to test
+            const originalState = currentState;
+            console.log(`Current state: ${originalState}`);
+            
+            // Force recording state for test
+            currentState = 'recording';
+            startHardcodedVisualizer();
+            
+            console.log('✅ Hardcoded visualizer started! You should see animated bars.');
+            console.log('📊 Bars will simulate speech patterns with:');
+            console.log('   - Base level between 0.1-0.4');
+            console.log('   - Random speech spikes');
+            console.log('   - Position-based frequency distribution');
+            console.log('   - Occasional silences');
+            
+            // Auto-stop after 10 seconds
+            setTimeout(() => {
+                stopHardcodedVisualizer();
+                currentState = originalState;
+                resetBars();
+                console.log('⏰ Hardcoded visualizer test completed');
+            }, 10000);
+        };
 
         // Initialize on load
         initVisualizer();
         console.log('✅ Recording window loaded');
         console.log('✅ Visualizer initialized with', bars.length, 'bars');
+        console.log('🎨 TEMPORARY: Using hardcoded audio visualizer');
         console.log('🔧 Debug commands available:');
+        console.log('   testHardcodedVisualizer() - Test the hardcoded visualizer');
         console.log('   debugBackendAudio() - Test backend audio endpoint');
         console.log('   debugWebRTCAudio() - Test WebRTC audio fallback');
 

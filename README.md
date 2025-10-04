@@ -1,147 +1,152 @@
 # 🎙️ Whisper4Windows
 
-**100% Local & Private Speech-to-Text for Windows**
+**Your Voice, Transcribed Instantly - 100% Private, No Internet Required**
 
-A free, local, GPU-accelerated speech-to-text app inspired by Superwhisper. Record anywhere with a global hotkey, and text appears instantly - **no internet required, your data never leaves your device**.
+Transform your voice into text anywhere on Windows with a simple keyboard shortcut. Whether you're writing emails, taking notes, or coding - Whisper4Windows puts professional speech-to-text at your fingertips, completely free and private.
 
 ![Whisper4Windows in Action](images/demo-google-search.png)
+![Whisper4Windows in Action](images/settings-window.png)
+*Speak naturally, watch your words appear instantly in any application*
 
 ---
 
-## ✨ Features
+## Why Whisper4Windows?
 
-- **🔒 100% Local & Private** - No internet required, your data never leaves your device
-- **🔥 Global Hotkey (F9)** - Record from anywhere, no need to switch windows
-- **🎨 Minimal Recording UI** - Sleek dark interface positioned at top center (616×140)
-- **⚡ GPU Acceleration** - 10x faster transcription with NVIDIA GPU
-- **🎯 Auto Text Injection** - Text pastes directly into any app via clipboard
-- **📊 Live Visualizer** - Real-time audio feedback with 80 animated bars
-- **🌊 Processing Animation** - Smooth wave animation during transcription
-- **⚙️ Flexible** - Choose CPU/GPU, multiple model sizes in-window
-- **⌨️ Esc to Cancel** - Global Esc hotkey cancels recording anytime
+### 🔒 **Completely Private**
+
+Your voice never leaves your computer. No cloud, no API keys, no subscriptions. Everything runs locally using OpenAI's powerful Whisper model.
+
+### ⚡ **Lightning Fast**
+
+With GPU acceleration, transcribe 5 seconds of speech in under 2 seconds. No waiting, no buffering - just instant results.
+
+### 🎯 **Works Everywhere**
+
+Press F9 from any app - Word, Chrome, Slack, VSCode - speak your thoughts, and watch text appear exactly where you need it.
+
+### 🌍 **Truly Multilingual**
+
+Supports 99 languages with automatic detection. Switch between languages effortlessly or lock to your preferred ones for better accuracy.
 
 ---
 
-## 🚀 Quick Start
+## 🎬 See It In Action
 
-### **1. Start the App**
+### **Simple 3-Step Workflow**
 
-```bash
-# Double-click or run:
-START_APP.bat
-```
-
-**First time only:** The app will automatically download the Whisper "small" model (~500MB). This takes 1-3 minutes depending on your internet speed. Subsequent launches are instant!
-
-### **2. Use the Global Hotkey (Recommended)**
-
-1. Open any text editor (Notepad, Word, etc.)
-2. Press **F9** - A minimal recording window appears at top center
-3. Speak your text (watch the live visualizer respond!)
-4. Press **F9** again - Window shows processing animation, then text appears
-5. Press **Esc** anytime to cancel recording
+1. **Press F9** - Minimal recording window appears at top of your screen
+2. **Speak naturally** - Watch the live visualizer respond to your voice
+3. **Press F9 again** - Text appears instantly where your cursor is
 
 ![Processing Wave Animation](images/processing-wave-animation.png)
-*Smooth wave animation during transcription processing - all happens locally on your device*
-
-### **3. Configure Settings**
-
-- Left-click system tray icon to open settings
-- Select model quality and processing device
-- Settings apply to all recordings
-
-![Settings Window](images/settings-window.png)
-*Configure model quality, processing device (GPU/CPU), and clipboard settings*
+*Beautiful wave animation shows processing in real-time - all happening locally on your device*
 
 ---
 
-## 📋 Requirements
+## ⚙️ Powerful Settings, Simple Interface
 
-- **Windows 10/11**
-- **8GB+ RAM**
-- **Microphone**
+Customize Whisper4Windows to work exactly how you want:
 
-**Optional (for 10x faster GPU acceleration):**
+![Configuration](images/Configuration-Panel.png)
+*Fine-tune your keyboard shortcuts, model quality, and processing device*
 
-- NVIDIA GPU (GTX 1060+ recommended)
-- CUDA Toolkit 12.6+ & cuDNN 9.x
+![Speech-to-Text Settings](images/Configuration-Panel-2.png)
+*Choose your preferred languages, enable GPU acceleration, and control clipboard behavior*
 
-📖 **[See detailed installation guide →](INSTALLATION.md)**
+![Sound Configuration](images/Sound-Panel.png)
+*Select your microphone, adjust sound effects, and customize the experience*
 
----
+### **Key Settings:**
 
-## ⚙️ Configuration
-
-### **Model Selection**
-
-- **Tiny** - Fastest, lower accuracy
-- **Base** - Fast, decent accuracy
-- **Small** - ⭐ Recommended - Balanced speed/quality
-- **Medium** - Slower, high accuracy
-- **Large V3** - Best quality, slowest
-
-### **Device Selection**
-
-- **Auto** - Tries GPU first, falls back to CPU
-- **GPU** - Force NVIDIA GPU (requires cuDNN)
-- **CPU** - Always works, slower
+- **🎯 Model Quality** - Balance speed vs accuracy (Tiny → Large V3)
+- **⚙️ Processing Device** - Auto-detect or force GPU/CPU
+- **🌍 Languages** - Auto-detect all 99 languages or pick your favorites
+- **🎤 Microphone** - Select from all available input devices
+- **🔊 Sound Effects** - Customizable beeps with volume control
+- **📋 Clipboard** - Keep text in clipboard or auto-restore previous content
+- **🎨 Themes** - Light, dark, or system-matched appearance
 
 ---
 
-## 📁 Project Structure
+## 🚀 Getting Started
 
-```
-Whisper4Windows/
-├── backend/                    # Python FastAPI backend
-│   ├── main.py                # API endpoints
-│   ├── whisper_engine.py      # Whisper model handling
-│   ├── audio_capture.py       # Audio recording
-│   ├── requirements.txt       # Python dependencies
-│   └── venv/                  # Python virtual environment
-├── frontend/                   # Tauri frontend
-│   ├── dist/index.html        # Web UI
-│   └── src-tauri/
-│       ├── src/lib.rs         # Rust logic (hotkey, injection)
-│       └── target/release/
-│           └── app.exe        # Built app
-├── START_APP.bat              # Main launcher
-├── STOP_APP.bat               # Stop all processes
-├── TEST_GPU.bat               # Test GPU setup
-├── .gitignore                 # Git ignore rules
-└── README.md                  # This file
-```
+### **Quick Setup**
+
+1. **Download** - Clone this repo or download the release
+2. **Run** - Double-click `START_APP.bat`
+3. **Wait** - First launch downloads the Whisper model (~500MB, one-time only)
+4. **Start Dictating!** - Press F9 anywhere and speak
+
+That's it! No accounts, no configuration wizards, no complicated setup.
+
+### **Try It Now**
+
+Open Notepad (or any text app), press **F9**, and say:
+
+> "Hello world, this is Whisper for Windows transcribing my voice in real-time, completely offline and private."
+
+Watch it appear instantly! ✨
 
 ---
 
-## 🎮 Usage
+## 💪 What You Can Do
 
-### **Global Hotkey Workflow (Recommended)**
-
-```
-Type in Word → Press F9 → Recording window appears → Speak → Press F9 → Processing animation → Text appears!
-```
-
-The minimal recording window (616×140, top center) shows:
-
-- ✅ Live audio visualizer (80 animated bars from backend audio stream)
-- ✅ Recording status with animated blue dot
-- ✅ Model selector dropdown (Tiny/Base/Small/Medium/Large)
-- ✅ Stop button (F9) and Cancel button (Esc)
-- ✅ Wave loading animation during transcription
-
-### **Settings Window**
-
-```
-Left-click tray icon → Choose model → Select device → Close
-```
-
-Settings are saved and apply to future recordings
+- **📝 Write Emails** - Dictate emails 3x faster than typing
+- **📄 Take Notes** - Capture meeting notes without looking away
+- **💬 Chat Messages** - Respond quickly in Slack, Teams, Discord
+- **📚 Write Documents** - Draft reports and documentation hands-free
+- **💻 Code Comments** - Dictate code comments and documentation
+- **🌐 Browse Faster** - Search Google by voice
+- **♿ Accessibility** - Perfect for users who prefer or need voice input
 
 ---
 
-## 🔧 Troubleshooting
+## 🔧 System Requirements
 
-### **Backend won't start**
+**Minimum:**
+
+- Windows 10/11
+- 8GB RAM
+- Microphone (built-in or external)
+
+**Recommended for GPU Acceleration:**
+
+- NVIDIA GPU (GTX 1060 or better)
+- 16GB RAM
+- CUDA 12.6+ & cuDNN 9.x installed
+
+**Performance:**
+
+- **GPU Mode:** 5 seconds of speech → 0.5-2 seconds transcription
+- **CPU Mode:** 5 seconds of speech → 5-15 seconds transcription
+
+📖 **Need help with GPU setup? [See installation guide →](INSTALLATION.md)**
+
+## ❓ FAQ
+
+**Q: Is this really free?**
+A: Yes! 100% free and open-source. No subscriptions, no API keys, no hidden costs.
+
+**Q: Do I need an internet connection?**
+A: Only for the first-time model download (~500MB). After that, everything works completely offline.
+
+**Q: Which languages are supported?**
+A: All 99 languages that Whisper supports - from Afrikaans to Zulu, including English, Spanish, French, German, Chinese, Japanese, Arabic, and many more.
+
+**Q: How accurate is it?**
+A: Very! Using the same AI model that powers many commercial services. Accuracy improves with better quality models (Medium/Large) and GPU acceleration.
+
+**Q: Will this slow down my computer?**
+A: No. The app only uses resources when actively recording and transcribing. It sits quietly in the system tray otherwise.
+
+**Q: Can I use it for work?**
+A: Absolutely! Perfect for emails, documentation, meeting notes, and more. Since everything is local, it's suitable for confidential work.
+
+---
+
+## 🛠️ Troubleshooting
+
+**Backend not starting?**
 
 ```bash
 cd backend
@@ -150,117 +155,56 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### **GPU not detected**
+**GPU not detected?**
 
 - Run `TEST_GPU.bat` to diagnose
-- See **[INSTALLATION.md](INSTALLATION.md)** for GPU setup
+- See [INSTALLATION.md](INSTALLATION.md) for GPU setup
 
-### **Hotkey not working**
+**Hotkey not working?**
 
-- Make sure app is running (check system tray)
+- Check system tray - app must be running
 - Try restarting the app
-- Check backend console for errors
-
-### **Text injection not working**
-
-- Focus the text window first
-- Wait for transcription to complete
+- Some apps may block global hotkeys
 
 📖 **[Full troubleshooting guide →](INSTALLATION.md#-troubleshooting)**
 
 ---
 
-## 📖 Documentation
+## 📚 Learn More
 
-- **[INSTALLATION.md](INSTALLATION.md)** - Complete setup guide (GPU, dependencies, troubleshooting)
-- **[instructions.md](instructions.md)** - Original design document & architecture reference
-- **[README.md](README.md)** - This file (quick start & usage)
-
----
-
-## 🛠️ Development
-
-### **Rebuild Frontend**
-
-```bash
-cd frontend
-cargo-tauri build --no-bundle
-```
-
-### **Run Backend Manually**
-
-```bash
-cd backend
-venv\Scripts\activate
-python main.py
-```
+- **[INSTALLATION.md](INSTALLATION.md)** - Detailed setup guide
+- **[TECHNICAL.md](TECHNICAL.md)** - Technical documentation for developers
+- **[DEVELOPMENT_MODE.md](DEVELOPMENT_MODE.md)** - Development workflow guide
 
 ---
 
-## 📊 Performance
+## 🤝 Contributing
 
-### **GPU Mode (NVIDIA RTX 4060)**
+Found a bug? Have a feature request? Contributions are welcome!
 
-- 5 seconds of speech → **0.5-2 seconds** transcription
-- Model loading: ~3 seconds (first time)
-
-### **CPU Mode**
-
-- 5 seconds of speech → **5-15 seconds** transcription
-- Model loading: ~5 seconds (first time)
-
----
-
-## 🎯 Roadmap
-
-- [X] GPU acceleration
-- [X] Global hotkey (F9) with press-only detection
-- [X] Auto text injection via clipboard paste
-- [X] System tray integration
-- [X] In-window model selector
-- [X] Minimal recording UI (616×140, top center)
-- [X] Live visualizer from backend audio stream
-- [X] Cancel recording with global Esc hotkey
-- [X] Wave loading animation during processing
-- [X] State management with auto-reset
-- [X] Backend audio level endpoint
-- [ ] Custom hotkey configuration
-- [ ] Multiple language support
-- [ ] Post-processing presets
-- [ ] Recording history
+1. Fork the repository
+2. Create your feature branch
+3. Submit a pull request
 
 ---
 
 ## 📝 License
 
-MIT License - Free to use and modify
+MIT License - Free to use and modify for personal or commercial use.
 
 ---
 
-## 🙏 Credits
+## ❤️ Acknowledgments
 
-- **Whisper** - OpenAI
-- **faster-whisper** - Systran
-- **CTranslate2** - OpenNMT
-- **Tauri** - Tauri Apps
-- **FastAPI** - Sebastián Ramírez
+Built with incredible open-source technology:
+
+- **Whisper** by OpenAI
+- **faster-whisper** by Systran
+- **Tauri** framework
+- **FastAPI** framework
+
+Inspired by Superwhisper for Mac.
 
 ---
 
-## 🎉 Getting Started
-
-**The fastest way:**
-
-1. Double-click `START_APP.bat`
-2. Open Notepad
-3. Press **F9** - Recording window appears at top
-4. Say "Testing Whisper for Windows"
-5. Press **F9** - Watch the wave animation process
-6. Text appears in Notepad! ✨
-
-**That's it!** Enjoy your local, private, GPU-accelerated dictation! 🎤
-
-**Tips:**
-- Press **Esc** during recording to cancel
-- Change model in the recording window dropdown
-- Check tray icon for main settings
+**Ready to transform your workflow? Download Whisper4Windows now and experience the future of voice input on Windows.** 🎤

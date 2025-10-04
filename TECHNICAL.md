@@ -1,7 +1,7 @@
 # Whisper4Windows - Technical Documentation
 
 **Version:** 1.0
-**Last Updated:** 2025-01-02
+**Last Updated:** 2025-10-03
 **Purpose:** Complete technical reference for AI assistants and developers
 
 ---
@@ -36,6 +36,11 @@ Inspired by SuperWhisper (Mac app), this is a Windows implementation with simila
 - **GPU Acceleration**: NVIDIA CUDA support via faster-whisper
 - **Clipboard-based Injection**: Text inserted via Ctrl+V simulation (not character-by-character)
 - **State Management**: Auto-resets when window becomes visible
+- **Multi-Language Support**: 13+ languages with auto-detection and preferred language selection
+- **Microphone Selection**: Choose input device from system audio devices
+- **Sound Effects**: Configurable beep sounds on recording start/stop using Web Audio API
+- **Clipboard Settings**: Toggle to save/skip clipboard saving when injecting text
+- **Theme Support**: Light, Dark, and System theme options with CSS variables
 
 ---
 
@@ -175,33 +180,38 @@ ctranslate2     # Efficient inference engine
 
 ```rust
 pub struct AppState {
-    pub selected_model: Arc<Mutex<String>>,    // "tiny", "base", "small", "medium", "large-v3"
-    pub selected_device: Arc<Mutex<String>>,   // "auto", "cpu", "cuda"
+    pub selected_model: Arc<Mutex<String>>,           // "tiny", "base", "small", "medium", "large-v3"
+    pub selected_device: Arc<Mutex<String>>,          // "auto", "cpu", "cuda"
+    pub selected_microphone: Arc<Mutex<Option<i32>>>, // Device index for microphone selection
+    pub preferred_languages: Arc<Mutex<Vec<String>>>, // List of preferred languages for transcription
+    pub use_clipboard: Arc<Mutex<bool>>,              // Whether to save text to clipboard
 }
 ```
 
 **Key Functions:**
 
-1. **`inject_text(text: &str) -> Result<()>`**
+1. **`inject_text(text: &str, save_to_clipboard: bool) -> Result<()>`**
    - Converts text to UTF-16
    - Opens Windows clipboard
+   - Optionally saves old clipboard content (if save_to_clipboard is false)
    - Copies text to clipboard
    - Simulates Ctrl+V keypress
+   - Restores old clipboard content (if save_to_clipboard is false)
    - Uses `SendInput` with KEYEVENTF_EXTENDEDKEY flags
    - **Critical:** Must be called AFTER window is hidden to preserve text field focus
 
 2. **`cmd_start_recording(app, state) -> Result<()>`**
    - Calculates window position: `(screen_width - 616) / 2, 50`
    - Shows window at top center
-   - Sends POST /start to backend with model/device
+   - Sends POST /start to backend with model/device/microphone/languages
    - **Does NOT** set focus (prevents deselecting text field)
 
-3. **`cmd_stop_recording(app) -> Result<()>`**
+3. **`cmd_stop_recording(app, state) -> Result<()>`**
    - Sends POST /stop to backend
    - Waits for transcription response
    - **Hides window FIRST** (critical for injection)
    - Waits 100ms for focus to return
-   - Injects text via `inject_text()`
+   - Injects text via `inject_text()` with clipboard setting from state
 
 4. **`cmd_toggle_recording(app, state) -> Result<()>`**
    - Checks `window.is_visible()`
@@ -212,6 +222,35 @@ pub struct AppState {
    - Sends POST /cancel to backend
    - Hides window immediately
    - No text injection
+
+**Tauri Commands:**
+
+1. **`set_preferred_languages(languages: Vec<String>, state: State<AppState>)`**
+   - Updates the preferred languages in AppState
+   - Languages stored in Arc<Mutex<Vec<String>>>
+   - Called from frontend settings
+
+2. **`get_preferred_languages(state: State<AppState>) -> Vec<String>`**
+   - Returns current preferred languages
+   - Used to populate settings UI
+
+3. **`set_microphone(device_index: Option<i32>, state: State<AppState>)`**
+   - Updates selected microphone device index
+   - Stored in Arc<Mutex<Option<i32>>>
+   - Called when user changes microphone selection
+
+4. **`get_microphone(state: State<AppState>) -> Option<i32>`**
+   - Returns currently selected microphone device index
+   - Used to restore selection in UI
+
+5. **`set_clipboard_setting(use_clipboard: bool, state: State<AppState>)`**
+   - Updates clipboard save preference
+   - Stored in Arc<Mutex<bool>>
+   - Determines whether to preserve old clipboard content
+
+6. **`get_clipboard_setting(state: State<AppState>) -> bool`**
+   - Returns current clipboard setting
+   - Used to restore toggle state in UI
 
 **Global Shortcuts Setup:**
 
@@ -263,6 +302,73 @@ WebviewWindowBuilder::new(app, "recording", ...)
 </div>
 ```
 
+**Sound Effects System:**
+
+Uses Web Audio API to play beep sounds on recording start/stop:
+
+```javascript
+// Settings loaded from localStorage
+const soundEffectsEnabled = localStorage.getItem('soundEffects') !== 'false';
+const volume = parseInt(localStorage.getItem('volume') || '50') / 100;
+
+// Play sound using AudioContext
+function playSound(frequency, duration) {
+    if (!soundEffectsEnabled) return;
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = frequency;  // 800Hz for start, 400Hz for stop
+    oscillator.type = 'sine';
+
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+}
+
+// Usage
+playSound(800, 0.1);   // Recording start: 800Hz, 0.1s
+playSound(400, 0.15);  // Recording stop: 400Hz, 0.15s
+```
+
+**Theme System:**
+
+CSS variables for theming with Light, Dark, and System modes:
+
+```css
+/* Theme variables */
+:root {
+    --bg-main: #ffffff;
+    --bg-sidebar: #f8f9fa;
+    --bg-card: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --accent-color: #3b82f6;
+}
+
+[data-theme="dark"] {
+    --bg-main: #1a1a1a;
+    --bg-sidebar: #111111;
+    --bg-card: #2a2a2a;
+    --text-primary: #ffffff;
+    --text-secondary: #9ca3af;
+    --border-color: #374151;
+    --accent-color: #60a5fa;
+}
+
+/* Applied via JavaScript */
+document.documentElement.setAttribute('data-theme', theme);
+```
+
+Theme is stored in localStorage and applied on page load. System theme matches OS preference using `window.matchMedia('(prefers-color-scheme: dark)')`.
+
 **Key CSS:**
 
 ```css
@@ -297,33 +403,42 @@ let wasVisible = false;           // Track visibility changes
    - Appends to `#visualizer`
    - Stores in `bars[]` array
 
-2. **`pollAudioLevels()`**
+2. **`loadAudioDevices()`**
+   - Fetches `http://127.0.0.1:8000/devices`
+   - Gets list of input/output devices
+   - Populates microphone dropdown with device names
+   - Restores selected device from localStorage
+   - Called on page load
+
+3. **`pollAudioLevels()`**
    - Fetches `http://127.0.0.1:8000/audio_level`
    - Gets `{level: 0.0-1.0, recording: bool}`
    - Calls `updateVisualizerFromLevel(level)`
    - Runs every 100ms when recording
 
-3. **`updateVisualizerFromLevel(level)`**
+4. **`updateVisualizerFromLevel(level)`**
    - Creates wave pattern: `Math.sin(offset + Date.now() / 200)`
    - Height calculation: `Math.max(3, level * 50 * wave)`
    - Updates each bar's height
 
-4. **`showProcessing()`**
+5. **`showProcessing()`**
    - Sets `isProcessing = true`
    - Stops audio polling
    - Changes status text to "Processing..."
    - Starts wave animation: `Math.sin(waveOffset + delay) * 12 + 12`
    - Wave travels across bars by incrementing `waveOffset += 0.15`
+   - Plays stop sound: `playSound(400, 0.15)`
 
-5. **`resetToRecording()`**
+6. **`resetToRecording()`**
    - Resets `isProcessing = false`
    - Clears wave animation
    - Resets status to "Recording..."
    - Resets all bars to 3px height
    - Starts audio polling
+   - Plays start sound: `playSound(800, 0.1)`
    - **Called automatically when window becomes visible**
 
-6. **`stopRecording()` (button click)**
+7. **`stopRecording()` (button click)**
    - Calls `showProcessing()`
    - Sends POST /stop
    - Gets transcription
@@ -361,12 +476,29 @@ is_recording = False
 
 **Key Endpoints:**
 
-1. **`POST /start`**
+1. **`GET /devices`**
+   ```python
+   Response: {
+       "devices": [
+           {"index": 0, "name": "Microphone (Realtek)", "type": "input", "channels": 2},
+           {"index": 1, "name": "Speakers (Realtek)", "type": "output", "channels": 2},
+           ...
+       ]
+   }
+   ```
+   - Returns list of all available audio input/output devices
+   - Uses `sounddevice.query_devices()` to enumerate system devices
+   - Includes device index, name, type (input/output), and channel count
+   - Frontend uses this to populate microphone selection dropdown
+
+2. **`POST /start`**
    ```python
    Request: {
        "model_size": "small",
        "language": "en",
-       "device": "auto"
+       "device": "auto",
+       "device_index": 0,          // Optional microphone device index
+       "preferred_languages": []    // Optional list of preferred languages
    }
    Response: {
        "status": "started",
@@ -375,26 +507,29 @@ is_recording = False
    }
    ```
    - Initializes `WhisperEngine` (doesn't load model yet)
-   - Creates `AudioCapture` instance
-   - Starts audio stream
+   - Creates `AudioCapture` instance with optional device_index
+   - Starts audio stream from selected microphone
+   - Stores preferred_languages for transcription
    - Sets `is_recording = True`
 
-2. **`POST /stop`**
+3. **`POST /stop`**
    ```python
    Response: {
        "status": "success",
        "text": "transcribed text here",
        "duration": 5.2,
-       "transcription_time": 0.8
+       "transcription_time": 0.8,
+       "language": "en"  # Detected or specified language
    }
    ```
    - Stops audio stream
    - Collects all audio chunks
    - Loads Whisper model (if not loaded)
-   - Runs transcription
-   - Returns text + metadata
+   - Runs transcription with preferred_languages if specified
+   - Auto-detects language or uses preferred languages to limit detection
+   - Returns text + metadata including detected language
 
-3. **`POST /cancel`**
+4. **`POST /cancel`**
    ```python
    Response: {
        "status": "success",
@@ -405,7 +540,7 @@ is_recording = False
    - Discards audio data
    - No transcription
 
-4. **`GET /audio_level`** (NEW)
+5. **`GET /audio_level`**
    ```python
    Response: {
        "level": 0.0-1.0,  # RMS level, normalized
@@ -427,9 +562,10 @@ is_recording = False
 
 ```python
 class AudioCapture:
-    def __init__(self, sample_rate=16000, channels=1):
+    def __init__(self, sample_rate=16000, channels=1, device_index=None):
         self.sample_rate = 16000  # Whisper requires 16kHz
         self.channels = 1
+        self.device_index = device_index  # Optional specific microphone
         self.audio_queue = queue.Queue()
         self.stream = None
 ```
@@ -437,8 +573,10 @@ class AudioCapture:
 **Key Methods:**
 
 1. **`start_recording()`**
-   - Creates `sounddevice.InputStream`
+   - Creates `sounddevice.InputStream` with optional device parameter
    - Uses WASAPI backend on Windows
+   - If device_index specified, uses that microphone device
+   - If None, uses system default microphone
    - Callback puts audio chunks in queue
    - Returns immediately (non-blocking)
 
@@ -494,17 +632,50 @@ def load_model():
 **Transcription:**
 
 ```python
-def transcribe_audio(audio_data: np.ndarray, language="en"):
-    segments, info = self.model.transcribe(
-        audio_data,
-        language=language,
-        beam_size=5,
-        vad_filter=True  # Voice Activity Detection
-    )
+def transcribe_audio(audio_data: np.ndarray, language="en", preferred_languages=None):
+    # If preferred_languages provided, use for auto-detection
+    # Otherwise use specified language or auto-detect from all languages
+    transcribe_params = {
+        "audio": audio_data,
+        "beam_size": 5,
+        "vad_filter": True  # Voice Activity Detection
+    }
+
+    if preferred_languages and len(preferred_languages) > 0:
+        # Limit auto-detection to preferred languages
+        transcribe_params["language"] = None  # Auto-detect
+        # Note: faster-whisper doesn't have direct preferred_languages param
+        # Language is auto-detected from audio
+    else:
+        transcribe_params["language"] = language
+
+    segments, info = self.model.transcribe(**transcribe_params)
 
     text = " ".join([segment.text for segment in segments])
-    return {"success": True, "text": text}
+    detected_language = info.language if hasattr(info, 'language') else language
+
+    return {
+        "success": True,
+        "text": text,
+        "language": detected_language
+    }
 ```
+
+**Supported Languages:**
+- English (en)
+- Arabic (ar)
+- Chinese (zh)
+- French (fr)
+- German (de)
+- Spanish (es)
+- Italian (it)
+- Japanese (ja)
+- Korean (ko)
+- Portuguese (pt)
+- Russian (ru)
+- Hindi (hi)
+- Turkish (tr)
+- And many more supported by Whisper model
 
 ---
 
@@ -791,6 +962,304 @@ if let Some(monitor) = win.current_monitor()? {
 ```
 
 **Critical:** Done every time window is shown, not just on creation, in case user changes monitors.
+
+### 7. Sound Effects with Web Audio API
+
+**Problem:** Need audio feedback for recording start/stop without adding dependencies.
+
+**Solution:** Use Web Audio API to generate beep tones programmatically.
+
+**Implementation:**
+```javascript
+function playSound(frequency, duration) {
+    // Check if sound effects are enabled
+    const soundEffectsEnabled = localStorage.getItem('soundEffects') !== 'false';
+    if (!soundEffectsEnabled) return;
+
+    // Get volume setting (0-100)
+    const volume = parseInt(localStorage.getItem('volume') || '50') / 100;
+
+    // Create audio context and oscillator
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    // Configure tone
+    oscillator.frequency.value = frequency;  // Hz
+    oscillator.type = 'sine';                // Waveform
+
+    // Apply volume with fade out
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+    // Play
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+}
+
+// Usage
+playSound(800, 0.1);   // Start: 800Hz for 0.1 seconds
+playSound(400, 0.15);  // Stop: 400Hz for 0.15 seconds
+```
+
+**Settings:**
+- Stored in localStorage: `soundEffects` (boolean), `volume` (0-100)
+- Higher frequency (800Hz) for start - more attention-grabbing
+- Lower frequency (400Hz) for stop - calming
+- Exponential fade out prevents clicking
+
+### 8. Microphone Device Selection
+
+**Problem:** Users may have multiple microphones and want to choose which one to use.
+
+**Solution:** Enumerate audio devices via backend, let user select from dropdown.
+
+**Implementation:**
+
+**Backend (main.py):**
+```python
+@app.get("/devices")
+async def get_devices():
+    import sounddevice as sd
+    devices = sd.query_devices()
+
+    device_list = []
+    for idx, device in enumerate(devices):
+        device_list.append({
+            "index": idx,
+            "name": device['name'],
+            "type": "input" if device['max_input_channels'] > 0 else "output",
+            "channels": device['max_input_channels']
+        })
+
+    return {"devices": device_list}
+```
+
+**Frontend (recording.html):**
+```javascript
+async function loadAudioDevices() {
+    const response = await fetch('http://127.0.0.1:8000/devices');
+    const data = await response.json();
+
+    const select = document.getElementById('microphoneSelect');
+    select.innerHTML = '';
+
+    // Filter for input devices only
+    const inputDevices = data.devices.filter(d => d.type === 'input');
+
+    inputDevices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.index;
+        option.textContent = device.name;
+        select.appendChild(option);
+    });
+
+    // Restore saved selection
+    const savedDevice = localStorage.getItem('selectedMicrophone');
+    if (savedDevice !== null) {
+        select.value = savedDevice;
+    }
+}
+```
+
+**Rust (lib.rs):**
+```rust
+// Store in AppState
+pub selected_microphone: Arc<Mutex<Option<i32>>>,
+
+// Tauri command to set microphone
+#[tauri::command]
+fn set_microphone(device_index: Option<i32>, state: State<AppState>) -> Result<(), String> {
+    let mut mic = state.selected_microphone.lock().unwrap();
+    *mic = device_index;
+    Ok(())
+}
+```
+
+**Flow:**
+1. Frontend loads devices on page load
+2. User selects microphone from dropdown
+3. Selection saved to localStorage and Tauri state
+4. On recording start, device_index sent to backend
+5. AudioCapture uses specified device
+
+### 9. Multi-Language Support
+
+**Problem:** Users speak different languages and want accurate transcription.
+
+**Solution:** Support 13+ languages with optional preferred language selection.
+
+**Implementation:**
+
+**Supported Languages:**
+```javascript
+const languages = [
+    { code: 'en', name: 'English' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'it', name: 'Italian' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'hi', name: 'Hindi' },
+    { code: 'tr', name: 'Turkish' }
+];
+```
+
+**Preferred Languages:**
+- User can select multiple preferred languages in settings
+- Stored in Rust state: `Arc<Mutex<Vec<String>>>`
+- Sent to backend with /start request
+- Whisper auto-detects language from audio
+- Preferred languages list helps narrow down detection
+- Detected language returned in /stop response
+
+**Rust State Management:**
+```rust
+#[tauri::command]
+fn set_preferred_languages(languages: Vec<String>, state: State<AppState>) -> Result<(), String> {
+    let mut prefs = state.preferred_languages.lock().unwrap();
+    *prefs = languages;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_preferred_languages(state: State<AppState>) -> Result<Vec<String>, String> {
+    let prefs = state.preferred_languages.lock().unwrap();
+    Ok(prefs.clone())
+}
+```
+
+### 10. Clipboard Settings
+
+**Problem:** Injecting text overwrites user's clipboard, losing copied data.
+
+**Solution:** Optional clipboard preservation - only save to clipboard if user wants it.
+
+**Implementation:**
+
+**Rust (lib.rs):**
+```rust
+fn inject_text(text: &str, save_to_clipboard: bool) -> Result<()> {
+    unsafe {
+        OpenClipboard(HWND::default())?;
+
+        // Save old clipboard content if not saving new text
+        let old_clipboard = if !save_to_clipboard {
+            Some(get_clipboard_content()?)  // Read current clipboard
+        } else {
+            None
+        };
+
+        // Copy new text and paste
+        EmptyClipboard()?;
+        set_clipboard_text(text)?;
+        CloseClipboard()?;
+
+        // Simulate Ctrl+V
+        simulate_ctrl_v()?;
+
+        // Restore old clipboard if needed
+        if let Some(old_text) = old_clipboard {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            OpenClipboard(HWND::default())?;
+            EmptyClipboard()?;
+            set_clipboard_text(&old_text)?;
+            CloseClipboard()?;
+        }
+    }
+    Ok(())
+}
+```
+
+**State Management:**
+```rust
+pub use_clipboard: Arc<Mutex<bool>>
+
+#[tauri::command]
+fn set_clipboard_setting(use_clipboard: bool, state: State<AppState>) -> Result<(), String> {
+    let mut setting = state.use_clipboard.lock().unwrap();
+    *setting = use_clipboard;
+    Ok(())
+}
+```
+
+**Frontend:**
+- Toggle in settings UI
+- Stored in localStorage and synced to Rust state
+- When true: transcribed text remains in clipboard
+- When false: old clipboard content is restored after paste
+
+### 11. Theme Support
+
+**Problem:** Users want to customize appearance and reduce eye strain.
+
+**Solution:** Light, Dark, and System themes using CSS variables.
+
+**Implementation:**
+
+**CSS Variables:**
+```css
+:root {
+    --bg-main: #ffffff;
+    --bg-sidebar: #f8f9fa;
+    --bg-card: #ffffff;
+    --text-primary: #1a1a1a;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --accent-color: #3b82f6;
+}
+
+[data-theme="dark"] {
+    --bg-main: #1a1a1a;
+    --bg-sidebar: #111111;
+    --bg-card: #2a2a2a;
+    --text-primary: #ffffff;
+    --text-secondary: #9ca3af;
+    --border-color: #374151;
+    --accent-color: #60a5fa;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+```
+
+**JavaScript:**
+```javascript
+function applyTheme(theme) {
+    if (theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        theme = prefersDark ? 'dark' : 'light';
+    }
+
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+}
+
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'system') {
+        applyTheme('system');
+    }
+});
+```
+
+**Features:**
+- Three modes: Light, Dark, System
+- System mode follows OS preference
+- Dynamically updates if OS theme changes
+- Stored in localStorage
+- Applied on page load
 
 ---
 

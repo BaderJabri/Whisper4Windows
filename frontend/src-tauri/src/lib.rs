@@ -23,6 +23,7 @@ use anyhow::Result;
 pub struct AppState {
     pub selected_model: Arc<Mutex<String>>,
     pub selected_device: Arc<Mutex<String>>,
+    pub selected_microphone: Arc<Mutex<Option<i32>>>,  // Microphone device index (None = default)
     pub use_clipboard: Arc<Mutex<bool>>,  // New: whether to paste to clipboard
 }
 
@@ -31,6 +32,7 @@ impl Default for AppState {
         Self {
             selected_model: Arc::new(Mutex::new("small".to_string())),
             selected_device: Arc::new(Mutex::new("auto".to_string())),
+            selected_microphone: Arc::new(Mutex::new(None)),  // Default: None (use default device)
             use_clipboard: Arc::new(Mutex::new(true)),  // Default: enabled
         }
     }
@@ -199,6 +201,7 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
 
     let model = state.selected_model.lock().await.clone();
     let device = state.selected_device.lock().await.clone();
+    let microphone = state.selected_microphone.lock().await.clone();
 
     // Position window at top center and show
     if let Some(win) = app.get_webview_window("recording") {
@@ -221,12 +224,19 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     // Call backend /start
     let client = reqwest::Client::new();
     tokio::spawn(async move {
+        let mut request_body = serde_json::json!({
+            "model_size": model,
+            "language": "en",
+            "device": device
+        });
+
+        // Add device_index if a specific microphone is selected
+        if let Some(device_index) = microphone {
+            request_body["device_index"] = serde_json::json!(device_index);
+        }
+
         match client.post("http://127.0.0.1:8000/start")
-            .json(&serde_json::json!({
-                "model_size": model,
-                "language": "en",
-                "device": device
-            }))
+            .json(&request_body)
             .send()
             .await
         {
@@ -342,6 +352,23 @@ async fn set_model_and_device(
     *state.selected_device.lock().await = device.clone();
     log::info!("⚙️ Settings: model={}, device={}", model, device);
     Ok(())
+}
+
+// Set microphone device
+#[tauri::command]
+async fn set_microphone_device(
+    device_index: Option<i32>,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    *state.selected_microphone.lock().await = device_index;
+    log::info!("🎤 Microphone device set to: {:?}", device_index);
+    Ok(())
+}
+
+// Get microphone device
+#[tauri::command]
+async fn get_microphone_device(state: State<'_, AppState>) -> Result<Option<i32>, String> {
+    Ok(*state.selected_microphone.lock().await)
 }
 
 // New: Set clipboard paste setting
@@ -481,6 +508,8 @@ pub fn run() {
             cmd_stop_recording,
             cmd_toggle_recording,
             set_model_and_device,
+            set_microphone_device,
+            get_microphone_device,
             set_clipboard_paste,
             get_clipboard_paste
         ])

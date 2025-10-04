@@ -37,6 +37,7 @@ class StartRequest(BaseModel):
     model_size: str = "small"  # tiny, base, small, medium, large-v3
     language: Optional[str] = "en"
     device: str = "auto"  # auto, cpu, cuda
+    device_index: Optional[int] = None  # Microphone device index (None = default)
 
 
 class StopRequest(BaseModel):
@@ -152,9 +153,15 @@ async def start_recording(request: StartRequest):
         # Initialize audio capture
         audio_capture = AudioCapture()
         audio_capture.clear_queue()
-        
-        # Start audio stream
-        audio_capture.start_recording()
+
+        # Start audio stream with selected device
+        device_index = request.device_index if request.device_index is not None else None
+        if device_index is not None:
+            logger.info(f"🎤 Using microphone device index: {device_index}")
+        else:
+            logger.info(f"🎤 Using default microphone device")
+
+        audio_capture.start_recording(device_index=device_index)
         await asyncio.sleep(0.1)
         
         is_recording = True

@@ -81,3 +81,4 @@ uvicorn main:app --port 8001
 Future: faster-whisper, sounddevice, onnxruntime-directml, webrtcvad
 
 
+

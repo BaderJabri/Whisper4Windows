@@ -19,9 +19,435 @@
             color: #333;
         }
 
+<<<<<<< Updated upstream
         .container {
             max-width: 500px;
             margin: 0 auto;
+=======
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #808080;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            margin: 4px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: var(--text-sidebar);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .sidebar-item:hover {
+            background: var(--sidebar-hover);
+        }
+
+        .sidebar-item.active {
+            background: var(--sidebar-active);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item-icon {
+            font-size: 18px;
+            margin-right: 12px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            background: var(--bg-main);
+            overflow-y: auto;
+            padding: 40px 60px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 30px;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+            margin-bottom: 50px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            align-items: start;
+            justify-content: space-between;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            border-color: #c0c0c0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .card-icon {
+            font-size: 24px;
+            margin-right: 20px;
+            opacity: 0.6;
+        }
+
+        .card-content {
+            flex: 1;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .card-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .card-badge {
+            background: #f0f0f0;
+            color: #666;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* What's New Section */
+        .whats-new-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .whats-new-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .view-all-link {
+            color: #667eea;
+            font-size: 14px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .changelog-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .changelog-date {
+            color: #999;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .changelog-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .changelog-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Configuration Page Styles */
+        .config-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 28px;
+            margin-bottom: 24px;
+        }
+
+        .config-section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+        }
+
+        .config-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .config-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .config-row:first-child {
+            padding-top: 0;
+        }
+
+        .config-row-left {
+            flex: 1;
+        }
+
+        .config-row-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .config-row-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .config-row-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* Shortcut Badge */
+        .shortcut-badge {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            border: 1px solid #4a4a4a;
+            min-width: 80px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .shortcut-badge:hover {
+            background: #4a4a4a;
+        }
+
+        .shortcut-badge.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .shortcut-badge.recording {
+            background: #667eea;
+            border-color: #667eea;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Select Dropdown */
+        select {
+            padding: 8px 32px 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Microphone selector specific styling */
+        #microphoneSelector {
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Language Dropdown Styles */
+        .language-dropdown-container {
+            position: relative;
+            width: 250px;
+        }
+
+        .language-search-input {
+            width: 100%;
+            padding: 8px 32px 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            background-image: url('data:image/svg+xml;charset=UTF-8,<svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L6 6L11 1" stroke="%23666" stroke-width="2" stroke-linecap="round"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        .language-search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .language-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-height: 300px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .language-search-filter {
+            width: calc(100% - 24px);
+            padding: 8px 12px;
+            margin: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            background: var(--bg-main);
+            color: var(--text-primary);
+        }
+
+        .language-search-filter:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .language-list {
+            overflow-y: auto;
+            max-height: 250px;
+        }
+
+        .language-option {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-primary);
+            transition: background 0.2s;
+        }
+
+        .language-option:hover {
+            background: var(--sidebar-hover);
+        }
+
+        .language-option.selected {
+            background: #667eea;
+            color: white;
+        }
+
+        .language-option.pinned {
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 8px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            background: #ccc;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #667eea;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+>>>>>>> Stashed changes
             background: white;
             border-radius: 12px;
             padding: 30px;
@@ -227,10 +653,20 @@
                     Text is always injected into the active text field. When this is enabled, the text also stays in your clipboard for you to paste elsewhere. When disabled, your original clipboard content is preserved.
                 </small>
             </div>
+<<<<<<< Updated upstream
             
             <div class="button-group">
                 <button id="liveStartBtn" onclick="startLiveRecording()" style="background: #28a745;">▶️ START Recording</button>
                 <button id="liveStopBtn" onclick="stopLiveRecording()" style="background: #dc3545; display: none;">⏹️ STOP Recording</button>
+=======
+
+            <div class="changelog-item">
+                <div class="changelog-date">Oct 2, 2025</div>
+                <div class="changelog-title">Editable Global Hotkeys & Live Audio Visualization</div>
+                <div class="changelog-description">
+                    Press F9 from anywhere to start/stop recording. New 80-bar live audio visualizer shows real-time feedback during recording, with smooth wave animation during processing.
+                </div>
+>>>>>>> Stashed changes
             </div>
             
             <div id="liveStatus" class="status"></div>
@@ -241,11 +677,385 @@
             </div>
         </div>
 
+<<<<<<< Updated upstream
+=======
+        <!-- VOCABULARY PAGE -->
+        <div id="page-vocabulary" class="page hidden">
+            <h1 class="section-title">Vocabulary</h1>
+            <div class="coming-soon">
+                <h3>🚧 Coming Soon</h3>
+                <p>Custom vocabulary feature is under development. You'll soon be able to teach Whisper4Windows custom words, names, and industry-specific terms.</p>
+            </div>
+        </div>
+
+        <!-- CONFIGURATION PAGE -->
+        <div id="page-configuration" class="page hidden">
+            <h1 class="section-title">Configuration</h1>
+
+            <!-- Keyboard Shortcuts Section -->
+            <div class="config-section" id="section-shortcuts">
+                <h3 class="config-section-title">Keyboard Shortcuts</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Toggle Recording</div>
+                        <div class="config-row-description">Starts and stops recordings</div>
+                    </div>
+                    <div class="config-row-right">
+                        <span class="reset-icon" onclick="resetShortcut('toggle')">↻</span>
+                        <div class="shortcut-badge" id="shortcut-toggle" onclick="captureShortcut('toggle')">F9</div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Cancel Recording</div>
+                        <div class="config-row-description">Discards the active recording</div>
+                    </div>
+                    <div class="config-row-right">
+                        <span class="reset-icon" onclick="resetShortcut('cancel')">↻</span>
+                        <div class="shortcut-badge" id="shortcut-cancel" onclick="captureShortcut('cancel')">Esc</div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Switch Mode</div>
+                        <div class="config-row-description">Activates the mode switcher</div>
+                    </div>
+                    <div class="config-row-right">
+                        <span class="reset-icon" style="opacity: 0.3;">↻</span>
+                        <div class="shortcut-badge disabled">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Speech-to-Text Section -->
+            <div class="config-section">
+                <h3 class="config-section-title">Speech-to-Text</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Backend Status</div>
+                        <div class="config-row-description">Connection to transcription engine</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="status-indicator" id="backendStatus">
+                            <span>⏳</span>
+                            <span>Checking...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Model Quality</div>
+                        <div class="config-row-description">Transcription accuracy vs speed</div>
+                    </div>
+                    <div class="config-row-right">
+                        <select id="modelSelector" onchange="saveSettings()">
+                            <option value="tiny">Tiny (Fastest)</option>
+                            <option value="base">Base</option>
+                            <option value="small" selected>Small (Recommended)</option>
+                            <option value="medium">Medium</option>
+                            <option value="large-v3">Large V3 (Best)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Processing Device</div>
+                        <div class="config-row-description">CPU or GPU acceleration</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="device-buttons">
+                            <button class="device-btn active" id="deviceAuto" onclick="selectDevice('auto')">Auto</button>
+                            <button class="device-btn" id="deviceGPU" onclick="selectDevice('cuda')">GPU</button>
+                            <button class="device-btn" id="deviceCPU" onclick="selectDevice('cpu')">CPU</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Save to Clipboard</div>
+                        <div class="config-row-description">Keep transcribed text in clipboard</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="toggle-switch active" id="clipboardToggle" onclick="toggleClipboardPaste()"></div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Language</div>
+                        <div class="config-row-description">Select language for transcription</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="language-dropdown-container">
+                            <input type="text"
+                                   id="languageSearch"
+                                   class="language-search-input"
+                                   placeholder="Search languages..."
+                                   autocomplete="off"
+                                   readonly
+                                   onclick="toggleLanguageDropdown()">
+                            <div id="languageDropdown" class="language-dropdown hidden">
+                                <input type="text"
+                                       id="languageSearchFilter"
+                                       class="language-search-filter"
+                                       placeholder="Type to search..."
+                                       onkeyup="filterLanguages()">
+                                <div id="languageList" class="language-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appearance Section -->
+            <div class="config-section">
+                <h3 class="config-section-title">Appearance</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Theme</div>
+                        <div class="config-row-description">Interface color scheme</div>
+                    </div>
+                    <div class="config-row-right">
+                        <select id="themeSelector" onchange="changeTheme()">
+                            <option value="system">System</option>
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Application Section -->
+            <div class="config-section">
+                <h3 class="config-section-title">Application</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Update Application</div>
+                        <div class="config-row-description">Check for latest GitHub release</div>
+                    </div>
+                    <div class="config-row-right">
+                        <button class="btn" onclick="checkForUpdates()">Check for Updates...</button>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Launch on Login</div>
+                        <div class="config-row-description">Start Whisper4Windows with Windows</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="toggle-switch" id="launchOnLoginToggle" onclick="toggleLaunchOnLogin()"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SOUND PAGE -->
+        <div id="page-sound" class="page hidden">
+            <h1 class="section-title">Sound</h1>
+
+            <!-- Microphone Section -->
+            <div class="config-section">
+                <h3 class="config-section-title">Microphone</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Device</div>
+                        <div class="config-row-description">Select microphone input</div>
+                    </div>
+                    <div class="config-row-right">
+                        <select id="microphoneSelector" onchange="saveMicrophoneDevice()">
+                            <option value="default">Default Microphone</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Automatically increase microphone volume</div>
+                        <div class="config-row-description">Boost quiet audio automatically</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="toggle-switch active" id="autoVolumeToggle" onclick="toggleAutoVolume()"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sound Effects Section -->
+            <div class="config-section">
+                <h3 class="config-section-title">Sound Effects</h3>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Enable sound effects</div>
+                        <div class="config-row-description">Play sounds for recording events</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="toggle-switch active" id="soundEffectsToggle" onclick="toggleSoundEffects()"></div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Volume</div>
+                        <div class="config-row-description">Sound effects volume level</div>
+                    </div>
+                    <div class="config-row-right">
+                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80" oninput="updateVolume()">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORY PAGE -->
+        <div id="page-history" class="page hidden">
+            <h1 class="section-title">History</h1>
+            <div class="coming-soon">
+                <h3>🚧 Coming Soon</h3>
+                <p>Recording history feature is under development. You'll soon be able to view and manage past transcriptions.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcut Capture Modal -->
+    <div id="shortcutModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>Press your desired shortcut</h3>
+            <p id="modalInstructions">Press any key combination (up to 3 keys)</p>
+            <div class="shortcut-badge recording" id="modalShortcut">Listening...</div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button class="btn" onclick="cancelShortcutCapture()">Cancel</button>
+            </div>
+        </div>
+>>>>>>> Stashed changes
     </div>
 
     <script>
         // Backend communication
         const BACKEND_URL = 'http://127.0.0.1:8000';
+<<<<<<< Updated upstream
+=======
+        let selectedDevice = 'auto';
+        let clipboardPasteEnabled = true;
+        let launchOnLogin = false;
+        let autoVolumeEnabled = true;
+        let soundEffectsEnabled = true;
+        let volume = 80;
+        let selectedLanguage = 'en'; // Default to English
+
+        // All 99 languages supported by Whisper
+        const allLanguages = [
+            { code: 'auto', name: 'Auto-Detect' },
+            { code: 'en', name: 'English' },
+            { code: 'zh', name: 'Chinese' },
+            { code: 'de', name: 'German' },
+            { code: 'es', name: 'Spanish' },
+            { code: 'ru', name: 'Russian' },
+            { code: 'ko', name: 'Korean' },
+            { code: 'fr', name: 'French' },
+            { code: 'ja', name: 'Japanese' },
+            { code: 'pt', name: 'Portuguese' },
+            { code: 'tr', name: 'Turkish' },
+            { code: 'pl', name: 'Polish' },
+            { code: 'ca', name: 'Catalan' },
+            { code: 'nl', name: 'Dutch' },
+            { code: 'ar', name: 'Arabic' },
+            { code: 'sv', name: 'Swedish' },
+            { code: 'it', name: 'Italian' },
+            { code: 'id', name: 'Indonesian' },
+            { code: 'hi', name: 'Hindi' },
+            { code: 'fi', name: 'Finnish' },
+            { code: 'vi', name: 'Vietnamese' },
+            { code: 'he', name: 'Hebrew' },
+            { code: 'uk', name: 'Ukrainian' },
+            { code: 'el', name: 'Greek' },
+            { code: 'ms', name: 'Malay' },
+            { code: 'cs', name: 'Czech' },
+            { code: 'ro', name: 'Romanian' },
+            { code: 'da', name: 'Danish' },
+            { code: 'hu', name: 'Hungarian' },
+            { code: 'ta', name: 'Tamil' },
+            { code: 'no', name: 'Norwegian' },
+            { code: 'th', name: 'Thai' },
+            { code: 'ur', name: 'Urdu' },
+            { code: 'hr', name: 'Croatian' },
+            { code: 'bg', name: 'Bulgarian' },
+            { code: 'lt', name: 'Lithuanian' },
+            { code: 'la', name: 'Latin' },
+            { code: 'mi', name: 'Maori' },
+            { code: 'ml', name: 'Malayalam' },
+            { code: 'cy', name: 'Welsh' },
+            { code: 'sk', name: 'Slovak' },
+            { code: 'te', name: 'Telugu' },
+            { code: 'fa', name: 'Persian' },
+            { code: 'lv', name: 'Latvian' },
+            { code: 'bn', name: 'Bengali' },
+            { code: 'sr', name: 'Serbian' },
+            { code: 'az', name: 'Azerbaijani' },
+            { code: 'sl', name: 'Slovenian' },
+            { code: 'kn', name: 'Kannada' },
+            { code: 'et', name: 'Estonian' },
+            { code: 'mk', name: 'Macedonian' },
+            { code: 'br', name: 'Breton' },
+            { code: 'eu', name: 'Basque' },
+            { code: 'is', name: 'Icelandic' },
+            { code: 'hy', name: 'Armenian' },
+            { code: 'ne', name: 'Nepali' },
+            { code: 'mn', name: 'Mongolian' },
+            { code: 'bs', name: 'Bosnian' },
+            { code: 'kk', name: 'Kazakh' },
+            { code: 'sq', name: 'Albanian' },
+            { code: 'sw', name: 'Swahili' },
+            { code: 'gl', name: 'Galician' },
+            { code: 'mr', name: 'Marathi' },
+            { code: 'pa', name: 'Punjabi' },
+            { code: 'si', name: 'Sinhala' },
+            { code: 'km', name: 'Khmer' },
+            { code: 'sn', name: 'Shona' },
+            { code: 'yo', name: 'Yoruba' },
+            { code: 'so', name: 'Somali' },
+            { code: 'af', name: 'Afrikaans' },
+            { code: 'oc', name: 'Occitan' },
+            { code: 'ka', name: 'Georgian' },
+            { code: 'be', name: 'Belarusian' },
+            { code: 'tg', name: 'Tajik' },
+            { code: 'sd', name: 'Sindhi' },
+            { code: 'gu', name: 'Gujarati' },
+            { code: 'am', name: 'Amharic' },
+            { code: 'yi', name: 'Yiddish' },
+            { code: 'lo', name: 'Lao' },
+            { code: 'uz', name: 'Uzbek' },
+            { code: 'fo', name: 'Faroese' },
+            { code: 'ht', name: 'Haitian Creole' },
+            { code: 'ps', name: 'Pashto' },
+            { code: 'tk', name: 'Turkmen' },
+            { code: 'nn', name: 'Nynorsk' },
+            { code: 'mt', name: 'Maltese' },
+            { code: 'sa', name: 'Sanskrit' },
+            { code: 'lb', name: 'Luxembourgish' },
+            { code: 'my', name: 'Myanmar' },
+            { code: 'bo', name: 'Tibetan' },
+            { code: 'tl', name: 'Tagalog' },
+            { code: 'mg', name: 'Malagasy' },
+            { code: 'as', name: 'Assamese' },
+            { code: 'tt', name: 'Tatar' },
+            { code: 'haw', name: 'Hawaiian' },
+            { code: 'ln', name: 'Lingala' },
+            { code: 'ha', name: 'Hausa' },
+            { code: 'ba', name: 'Bashkir' },
+            { code: 'jw', name: 'Javanese' },
+            { code: 'su', name: 'Sundanese' }
+        ];
+>>>>>>> Stashed changes
 
         async function checkBackendHealth() {
             try {
@@ -322,8 +1132,237 @@
                 console.error('❌ Error setting clipboard paste:', error);
             }
         }
+<<<<<<< Updated upstream
         
         // Save current settings to backend
+=======
+
+        async function toggleLaunchOnLogin() {
+            const toggle = document.getElementById('launchOnLoginToggle');
+            launchOnLogin = !launchOnLogin;
+
+            if (launchOnLogin) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_launch_on_login', { enabled: launchOnLogin });
+            } catch (error) {
+                console.error('❌ Error setting launch on login:', error);
+            }
+        }
+
+        function toggleAutoVolume() {
+            const toggle = document.getElementById('autoVolumeToggle');
+            autoVolumeEnabled = !autoVolumeEnabled;
+
+            if (autoVolumeEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            localStorage.setItem('autoVolume', autoVolumeEnabled);
+        }
+
+        function toggleSoundEffects() {
+            const toggle = document.getElementById('soundEffectsToggle');
+            soundEffectsEnabled = !soundEffectsEnabled;
+
+            if (soundEffectsEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            localStorage.setItem('soundEffects', soundEffectsEnabled);
+        }
+
+        function updateVolume() {
+            volume = document.getElementById('volumeSlider').value;
+            localStorage.setItem('volume', volume);
+        }
+
+        async function loadAudioDevices() {
+            try {
+                console.log('🎤 Loading audio devices...');
+                const response = await fetch(`${BACKEND_URL}/devices`);
+                const data = await response.json();
+
+                if (data.success && data.inputs && data.inputs.length > 0) {
+                    const selector = document.getElementById('microphoneSelector');
+
+                    // Clear existing options
+                    selector.innerHTML = '';
+
+                    // Add each input device
+                    data.inputs.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.id;
+                        
+                        // Truncate long device names to prevent overflow
+                        const maxLength = 35; // Adjust based on your needs
+                        const displayName = device.name.length > maxLength 
+                            ? device.name.substring(0, maxLength) + '...' 
+                            : device.name;
+                        
+                        option.textContent = displayName;
+                        option.title = device.name; // Show full name on hover
+                        selector.appendChild(option);
+                    });
+
+                    // Restore previously selected device
+                    const savedDevice = localStorage.getItem('selectedMicrophone');
+                    if (savedDevice !== null) {
+                        selector.value = savedDevice;
+                    }
+
+                    console.log(`✅ Loaded ${data.inputs.length} input devices`);
+                } else {
+                    console.warn('⚠️ No input devices found, keeping default option');
+                }
+            } catch (error) {
+                console.error('❌ Error loading audio devices:', error);
+                // Keep the default "Default Microphone" option on error
+            }
+        }
+
+        async function saveMicrophoneDevice() {
+            const selector = document.getElementById('microphoneSelector');
+            const deviceId = selector.value;
+
+            // Parse device ID as integer or null for default
+            const deviceIndex = deviceId === 'default' ? null : parseInt(deviceId);
+
+            // Save to localStorage
+            localStorage.setItem('selectedMicrophone', deviceId);
+
+            // Save to Tauri state
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_microphone_device', { deviceIndex: deviceIndex });
+                console.log(`✅ Saved microphone device: ${deviceId} (${selector.options[selector.selectedIndex].text})`);
+            } catch (error) {
+                console.error('❌ Error saving microphone device:', error);
+            }
+        }
+
+        // Language Dropdown Functions
+        function initLanguageDropdown() {
+            const languageList = document.getElementById('languageList');
+            languageList.innerHTML = '';
+
+            // Add Auto-Detect (pinned at top)
+            const autoOption = document.createElement('div');
+            autoOption.className = 'language-option pinned';
+            autoOption.textContent = 'Auto-Detect';
+            autoOption.dataset.code = 'auto';
+            autoOption.onclick = () => selectLanguage('auto', 'Auto-Detect');
+            languageList.appendChild(autoOption);
+
+            // Add all other languages (skip auto as it's already added)
+            allLanguages.slice(1).forEach(lang => {
+                const option = document.createElement('div');
+                option.className = 'language-option';
+                option.textContent = lang.name;
+                option.dataset.code = lang.code;
+                option.onclick = () => selectLanguage(lang.code, lang.name);
+                languageList.appendChild(option);
+            });
+
+            // Set default to English
+            updateLanguageDisplay();
+        }
+
+        function toggleLanguageDropdown() {
+            const dropdown = document.getElementById('languageDropdown');
+            const filter = document.getElementById('languageSearchFilter');
+
+            if (dropdown.classList.contains('hidden')) {
+                dropdown.classList.remove('hidden');
+                setTimeout(() => filter.focus(), 100);
+            } else {
+                dropdown.classList.add('hidden');
+                filter.value = '';
+                filterLanguages();
+            }
+        }
+
+        function filterLanguages() {
+            const filter = document.getElementById('languageSearchFilter').value.toLowerCase();
+            const options = document.querySelectorAll('.language-option:not(.pinned)');
+
+            options.forEach(option => {
+                const text = option.textContent.toLowerCase();
+                if (text.includes(filter)) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+        }
+
+        async function selectLanguage(code, name) {
+            selectedLanguage = code;
+            updateLanguageDisplay();
+            toggleLanguageDropdown();
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_preferred_language', { language: code });
+                console.log('✅ Language saved:', code, name);
+            } catch (error) {
+                console.error('❌ Error saving language:', error);
+            }
+        }
+
+        function updateLanguageDisplay() {
+            const searchInput = document.getElementById('languageSearch');
+            const lang = allLanguages.find(l => l.code === selectedLanguage);
+            searchInput.value = lang ? lang.name : 'English';
+
+            // Update selected styling
+            document.querySelectorAll('.language-option').forEach(opt => {
+                if (opt.dataset.code === selectedLanguage) {
+                    opt.classList.add('selected');
+                } else {
+                    opt.classList.remove('selected');
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const container = document.querySelector('.language-dropdown-container');
+            const dropdown = document.getElementById('languageDropdown');
+
+            if (container && !container.contains(e.target)) {
+                if (!dropdown.classList.contains('hidden')) {
+                    dropdown.classList.add('hidden');
+                    document.getElementById('languageSearchFilter').value = '';
+                    filterLanguages();
+                }
+            }
+        });
+
+        async function checkForUpdates() {
+            try {
+                alert('Checking for updates from GitHub...');
+
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const result = await invoke('check_for_updates');
+
+                alert(result);
+            } catch (error) {
+                console.error('❌ Error checking for updates:', error);
+                alert('Failed to check for updates. Please check your internet connection.');
+            }
+        }
+
+>>>>>>> Stashed changes
         async function saveSettings() {
             const modelSelector = document.getElementById('modelSelector');
             const model = modelSelector ? modelSelector.value : 'small';
@@ -513,6 +1552,7 @@
             } catch (error) {
                 console.error('❌ Error loading clipboard paste setting:', error);
             }
+<<<<<<< Updated upstream
             
             // Check backend status on load
             setTimeout(() => {
@@ -531,6 +1571,84 @@
                     saveSettings();
                 });
             }
+=======
+
+            // Load launch on login setting
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const enabled = await invoke('get_launch_on_login');
+                launchOnLogin = enabled;
+                const toggle = document.getElementById('launchOnLoginToggle');
+                if (enabled) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
+            } catch (error) {
+                console.error('❌ Error loading launch on login setting:', error);
+            }
+
+            // Load sound settings from localStorage
+            autoVolumeEnabled = localStorage.getItem('autoVolume') !== 'false';
+            soundEffectsEnabled = localStorage.getItem('soundEffects') !== 'false';
+            volume = parseInt(localStorage.getItem('volume') || '80');
+
+            const autoVolumeToggle = document.getElementById('autoVolumeToggle');
+            const soundEffectsToggle = document.getElementById('soundEffectsToggle');
+            const volumeSlider = document.getElementById('volumeSlider');
+
+            if (autoVolumeEnabled) autoVolumeToggle.classList.add('active');
+            else autoVolumeToggle.classList.remove('active');
+
+            if (soundEffectsEnabled) soundEffectsToggle.classList.add('active');
+            else soundEffectsToggle.classList.remove('active');
+
+            volumeSlider.value = volume;
+
+            // Load microphone device setting
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const savedDeviceIndex = await invoke('get_microphone_device');
+                if (savedDeviceIndex !== null) {
+                    console.log(`✅ Loaded microphone device index: ${savedDeviceIndex}`);
+                }
+            } catch (error) {
+                console.error('❌ Error loading microphone device:', error);
+            }
+
+            // Initialize language dropdown
+            initLanguageDropdown();
+
+            // Load saved language
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const savedLanguage = await invoke('get_preferred_language');
+                if (savedLanguage) {
+                    selectedLanguage = savedLanguage;
+                    updateLanguageDisplay();
+                    console.log('✅ Loaded language:', savedLanguage);
+                }
+            } catch (error) {
+                console.error('❌ Error loading language:', error);
+                // Keep default English if error
+            }
+
+            // Load saved shortcuts
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const toggleShortcut = await invoke('get_toggle_shortcut');
+                shortcuts.toggle = toggleShortcut;
+                document.getElementById('shortcut-toggle').textContent = toggleShortcut;
+            } catch (error) {
+                console.error('❌ Error loading shortcuts:', error);
+            }
+
+            setTimeout(checkBackendHealth, 500);
+            setTimeout(saveSettings, 1000);
+
+            // Load audio devices for the Sound page
+            setTimeout(loadAudioDevices, 800);
+>>>>>>> Stashed changes
         });
     </script>
 </body>

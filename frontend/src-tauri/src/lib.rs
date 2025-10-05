@@ -17,6 +17,7 @@ use windows::Win32::{
 };
 use tokio::sync::Mutex;
 use anyhow::Result;
+use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
 
 // Simple state - track model, device, and clipboard setting
 #[derive(Debug, Clone)]
@@ -27,6 +28,7 @@ pub struct AppState {
     pub use_clipboard: Arc<Mutex<bool>>,  // New: whether to paste to clipboard
     pub selected_language: Arc<Mutex<String>>,  // Selected language code
     pub toggle_shortcut: Arc<Mutex<String>>,  // Toggle recording shortcut
+    pub cancel_shortcut: Arc<Mutex<String>>,  // Cancel recording shortcut
     pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,  // Backend process handle
 }
 
@@ -39,6 +41,7 @@ impl Default for AppState {
             use_clipboard: Arc::new(Mutex::new(true)),  // Default: enabled
             selected_language: Arc::new(Mutex::new("en".to_string())),  // Default: English
             toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),  // Default: F9
+            cancel_shortcut: Arc::new(Mutex::new("Escape".to_string())),  // Default: Escape
             backend_child: Arc::new(Mutex::new(None)),  // Will be set in setup
         }
     }
@@ -450,19 +453,203 @@ async fn get_language(state: State<'_, AppState>) -> Result<String, String> {
     Ok(state.selected_language.lock().await.clone())
 }
 
+// Helper function to parse shortcut string to Shortcut object
+fn parse_shortcut(shortcut_str: &str) -> Option<Shortcut> {
+
+    let parts: Vec<&str> = shortcut_str.split('+').collect();
+    let mut modifiers = Modifiers::empty();
+    let mut key_code: Option<Code> = None;
+
+    for part in parts {
+        let part = part.trim();
+        match part {
+            "Ctrl" | "Control" => modifiers |= Modifiers::CONTROL,
+            "Alt" => modifiers |= Modifiers::ALT,
+            "Shift" => modifiers |= Modifiers::SHIFT,
+            "Super" | "Win" | "Meta" => modifiers |= Modifiers::SUPER,
+            // Function keys
+            "F1" => key_code = Some(Code::F1),
+            "F2" => key_code = Some(Code::F2),
+            "F3" => key_code = Some(Code::F3),
+            "F4" => key_code = Some(Code::F4),
+            "F5" => key_code = Some(Code::F5),
+            "F6" => key_code = Some(Code::F6),
+            "F7" => key_code = Some(Code::F7),
+            "F8" => key_code = Some(Code::F8),
+            "F9" => key_code = Some(Code::F9),
+            "F10" => key_code = Some(Code::F10),
+            "F11" => key_code = Some(Code::F11),
+            "F12" => key_code = Some(Code::F12),
+            // Special keys
+            "Escape" | "Esc" => key_code = Some(Code::Escape),
+            "Space" => key_code = Some(Code::Space),
+            "Tab" => key_code = Some(Code::Tab),
+            "Enter" | "Return" => key_code = Some(Code::Enter),
+            "Backspace" => key_code = Some(Code::Backspace),
+            "Delete" => key_code = Some(Code::Delete),
+            "Insert" => key_code = Some(Code::Insert),
+            "Home" => key_code = Some(Code::Home),
+            "End" => key_code = Some(Code::End),
+            "PageUp" => key_code = Some(Code::PageUp),
+            "PageDown" => key_code = Some(Code::PageDown),
+            // Arrow keys
+            "ArrowUp" | "Up" => key_code = Some(Code::ArrowUp),
+            "ArrowDown" | "Down" => key_code = Some(Code::ArrowDown),
+            "ArrowLeft" | "Left" => key_code = Some(Code::ArrowLeft),
+            "ArrowRight" | "Right" => key_code = Some(Code::ArrowRight),
+            // Letter keys (single character)
+            s if s.len() == 1 && s.chars().next().unwrap().is_alphabetic() => {
+                let ch = s.chars().next().unwrap().to_ascii_uppercase();
+                key_code = match ch {
+                    'A' => Some(Code::KeyA),
+                    'B' => Some(Code::KeyB),
+                    'C' => Some(Code::KeyC),
+                    'D' => Some(Code::KeyD),
+                    'E' => Some(Code::KeyE),
+                    'F' => Some(Code::KeyF),
+                    'G' => Some(Code::KeyG),
+                    'H' => Some(Code::KeyH),
+                    'I' => Some(Code::KeyI),
+                    'J' => Some(Code::KeyJ),
+                    'K' => Some(Code::KeyK),
+                    'L' => Some(Code::KeyL),
+                    'M' => Some(Code::KeyM),
+                    'N' => Some(Code::KeyN),
+                    'O' => Some(Code::KeyO),
+                    'P' => Some(Code::KeyP),
+                    'Q' => Some(Code::KeyQ),
+                    'R' => Some(Code::KeyR),
+                    'S' => Some(Code::KeyS),
+                    'T' => Some(Code::KeyT),
+                    'U' => Some(Code::KeyU),
+                    'V' => Some(Code::KeyV),
+                    'W' => Some(Code::KeyW),
+                    'X' => Some(Code::KeyX),
+                    'Y' => Some(Code::KeyY),
+                    'Z' => Some(Code::KeyZ),
+                    _ => None,
+                };
+            }
+            // Number keys
+            s if s.len() == 1 && s.chars().next().unwrap().is_numeric() => {
+                let ch = s.chars().next().unwrap();
+                key_code = match ch {
+                    '0' => Some(Code::Digit0),
+                    '1' => Some(Code::Digit1),
+                    '2' => Some(Code::Digit2),
+                    '3' => Some(Code::Digit3),
+                    '4' => Some(Code::Digit4),
+                    '5' => Some(Code::Digit5),
+                    '6' => Some(Code::Digit6),
+                    '7' => Some(Code::Digit7),
+                    '8' => Some(Code::Digit8),
+                    '9' => Some(Code::Digit9),
+                    _ => None,
+                };
+            }
+            // Special symbol keys
+            "\\" | "Backslash" => key_code = Some(Code::Backslash),
+            "/" | "Slash" => key_code = Some(Code::Slash),
+            ";" | "Semicolon" => key_code = Some(Code::Semicolon),
+            "'" | "Quote" => key_code = Some(Code::Quote),
+            "[" | "BracketLeft" => key_code = Some(Code::BracketLeft),
+            "]" | "BracketRight" => key_code = Some(Code::BracketRight),
+            "," | "Comma" => key_code = Some(Code::Comma),
+            "." | "Period" => key_code = Some(Code::Period),
+            "`" | "Backquote" => key_code = Some(Code::Backquote),
+            "-" | "Minus" => key_code = Some(Code::Minus),
+            "=" | "Equal" => key_code = Some(Code::Equal),
+            _ => {
+                log::warn!("⚠️ Unknown key: {}", part);
+            }
+        }
+    }
+
+    if let Some(code) = key_code {
+        Some(Shortcut::new(Some(modifiers), code))
+    } else {
+        None
+    }
+}
+
 // Shortcut commands
 #[tauri::command]
-async fn save_shortcuts(shortcuts: std::collections::HashMap<String, String>, state: State<'_, AppState>) -> Result<(), String> {
+async fn save_shortcuts(
+    shortcuts: std::collections::HashMap<String, String>,
+    app: AppHandle,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    // Handle toggle shortcut
     if let Some(toggle) = shortcuts.get("toggle") {
+        let old_shortcut = state.toggle_shortcut.lock().await.clone();
         *state.toggle_shortcut.lock().await = toggle.clone();
-        log::info!("⌨️ Toggle shortcut saved: {}", toggle);
+        log::info!("⌨️ Toggle shortcut saved: {} (was: {})", toggle, old_shortcut);
+
+        // Re-register the shortcut
+        // First, unregister old shortcut
+        if let Some(old_sc) = parse_shortcut(&old_shortcut) {
+            if let Err(e) = app.global_shortcut().unregister(old_sc) {
+                log::warn!("⚠️ Failed to unregister old toggle shortcut {}: {}", old_shortcut, e);
+            } else {
+                log::info!("✅ Unregistered old toggle shortcut: {}", old_shortcut);
+            }
+        }
+
+        // Register new shortcut
+        if let Some(new_sc) = parse_shortcut(toggle) {
+            if let Err(e) = app.global_shortcut().register(new_sc) {
+                log::error!("❌ Failed to register new toggle shortcut {}: {}", toggle, e);
+                return Err(format!("Failed to register toggle shortcut: {}", e));
+            } else {
+                log::info!("✅ Registered new toggle shortcut: {}", toggle);
+            }
+        } else {
+            log::error!("❌ Failed to parse toggle shortcut: {}", toggle);
+            return Err(format!("Invalid toggle shortcut format: {}", toggle));
+        }
     }
+
+    // Handle cancel shortcut
+    if let Some(cancel) = shortcuts.get("cancel") {
+        let old_shortcut = state.cancel_shortcut.lock().await.clone();
+        *state.cancel_shortcut.lock().await = cancel.clone();
+        log::info!("⌨️ Cancel shortcut saved: {} (was: {})", cancel, old_shortcut);
+
+        // Re-register the shortcut
+        // First, unregister old shortcut
+        if let Some(old_sc) = parse_shortcut(&old_shortcut) {
+            if let Err(e) = app.global_shortcut().unregister(old_sc) {
+                log::warn!("⚠️ Failed to unregister old cancel shortcut {}: {}", old_shortcut, e);
+            } else {
+                log::info!("✅ Unregistered old cancel shortcut: {}", old_shortcut);
+            }
+        }
+
+        // Register new shortcut
+        if let Some(new_sc) = parse_shortcut(cancel) {
+            if let Err(e) = app.global_shortcut().register(new_sc) {
+                log::error!("❌ Failed to register new cancel shortcut {}: {}", cancel, e);
+                return Err(format!("Failed to register cancel shortcut: {}", e));
+            } else {
+                log::info!("✅ Registered new cancel shortcut: {}", cancel);
+            }
+        } else {
+            log::error!("❌ Failed to parse cancel shortcut: {}", cancel);
+            return Err(format!("Invalid cancel shortcut format: {}", cancel));
+        }
+    }
+
     Ok(())
 }
 
 #[tauri::command]
 async fn get_toggle_shortcut(state: State<'_, AppState>) -> Result<String, String> {
     Ok(state.toggle_shortcut.lock().await.clone())
+}
+
+#[tauri::command]
+async fn get_cancel_shortcut(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.cancel_shortcut.lock().await.clone())
 }
 
 // Stub commands for settings that don't need backend implementation yet
@@ -550,7 +737,6 @@ pub fn run() {
             }
         }))
         .setup(|app| {
-            use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
             use tauri::WebviewWindowBuilder;
 
             // Logging
@@ -617,9 +803,7 @@ pub fn run() {
 
             log::info!("✅ Tray icon created");
 
-            // Global shortcuts (F9 and Escape)
-            let f9_shortcut = Shortcut::new(None, Code::F9);
-            let esc_shortcut = Shortcut::new(None, Code::Escape);
+            // Global shortcuts handler
             let app_handle_hotkey = app.handle().clone();
 
             app.handle().plugin(
@@ -628,41 +812,72 @@ pub fn run() {
                         use tauri_plugin_global_shortcut::ShortcutState;
                         // Only trigger on key press, not release
                         if event.state == ShortcutState::Pressed {
-                            let shortcut_str = format!("{:?}", shortcut);
+                            let app_clone = app_handle_hotkey.clone();
+                            let shortcut_str = format!("{:?}", shortcut); // Format outside async block
 
-                            if shortcut_str.contains("Escape") {
-                                log::info!("🔥 ESCAPE TRIGGERED");
-                                let app_clone = app_handle_hotkey.clone();
-                                tauri::async_runtime::spawn(async move {
-                                    // Only cancel if recording window is visible
-                                    if let Some(win) = app_clone.get_webview_window("recording") {
-                                        if win.is_visible().unwrap_or(false) {
-                                            let _ = cmd_cancel_recording(app_clone).await;
+                            tauri::async_runtime::spawn(async move {
+                                let state: tauri::State<AppState> = app_clone.state();
+                                let toggle_sc = state.toggle_shortcut.lock().await.clone();
+                                let cancel_sc = state.cancel_shortcut.lock().await.clone();
+
+                                // Check if this is the cancel shortcut
+                                if let Some(parsed_cancel) = parse_shortcut(&cancel_sc) {
+                                    let cancel_str = format!("{:?}", parsed_cancel);
+                                    if shortcut_str == cancel_str {
+                                        log::info!("🔥 CANCEL SHORTCUT TRIGGERED ({})", cancel_sc);
+                                        // Only cancel if recording window is visible
+                                        if let Some(win) = app_clone.get_webview_window("recording") {
+                                            if win.is_visible().unwrap_or(false) {
+                                                let _ = cmd_cancel_recording(app_clone.clone()).await;
+                                                return;
+                                            }
                                         }
                                     }
-                                });
-                            } else {
-                                log::info!("🔥 F9 TRIGGERED");
-                                let app_clone = app_handle_hotkey.clone();
-                                tauri::async_runtime::spawn(async move {
-                                    let _ = cmd_toggle_recording(app_clone.clone(), app_clone.state()).await;
-                                });
-                            }
+                                }
+
+                                // Check if this is the toggle shortcut
+                                if let Some(parsed_toggle) = parse_shortcut(&toggle_sc) {
+                                    let toggle_str = format!("{:?}", parsed_toggle);
+                                    if shortcut_str == toggle_str {
+                                        log::info!("🔥 TOGGLE SHORTCUT TRIGGERED ({})", toggle_sc);
+                                        let _ = cmd_toggle_recording(app_clone.clone(), app_clone.state()).await;
+                                    }
+                                }
+                            });
                         }
                     })
                     .build()
             )?;
 
-            if let Err(e) = app.global_shortcut().register(f9_shortcut) {
-                log::error!("❌ Failed to register F9: {}", e);
+            // Register initial shortcuts
+            let state: tauri::State<AppState> = app.state();
+            let (initial_toggle, initial_cancel) = tauri::async_runtime::block_on(async {
+                (
+                    state.toggle_shortcut.lock().await.clone(),
+                    state.cancel_shortcut.lock().await.clone()
+                )
+            });
+
+            // Register toggle shortcut
+            if let Some(toggle_sc) = parse_shortcut(&initial_toggle) {
+                if let Err(e) = app.global_shortcut().register(toggle_sc) {
+                    log::error!("❌ Failed to register toggle shortcut {}: {}", initial_toggle, e);
+                } else {
+                    log::info!("✅ Toggle shortcut registered: {}", initial_toggle);
+                }
             } else {
-                log::info!("✅ F9 shortcut registered");
+                log::error!("❌ Failed to parse initial toggle shortcut: {}", initial_toggle);
             }
 
-            if let Err(e) = app.global_shortcut().register(esc_shortcut) {
-                log::error!("❌ Failed to register Escape: {}", e);
+            // Register cancel shortcut
+            if let Some(cancel_sc) = parse_shortcut(&initial_cancel) {
+                if let Err(e) = app.global_shortcut().register(cancel_sc) {
+                    log::error!("❌ Failed to register cancel shortcut {}: {}", initial_cancel, e);
+                } else {
+                    log::info!("✅ Cancel shortcut registered: {}", initial_cancel);
+                }
             } else {
-                log::info!("✅ Escape shortcut registered");
+                log::error!("❌ Failed to parse initial cancel shortcut: {}", initial_cancel);
             }
 
             log::info!("💡 Press F9 to start/stop recording");
@@ -684,6 +899,7 @@ pub fn run() {
             get_language,
             save_shortcuts,
             get_toggle_shortcut,
+            get_cancel_shortcut,
             get_preferred_languages,
             set_preferred_languages,
             get_launch_on_login,

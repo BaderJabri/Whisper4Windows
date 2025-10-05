@@ -225,6 +225,10 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
         }
 
         win.show().map_err(|e| e.to_string())?;
+
+        // Play start sound
+        let _ = win.eval("playStartSound()");
+
         log::info!("✅ Window shown at top center");
     }
 
@@ -263,6 +267,35 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     Ok(())
 }
 
+// Simple command: Cancel recording
+#[tauri::command]
+async fn cmd_cancel_recording(app: AppHandle) -> Result<(), String> {
+    log::info!("═══════════════════════════════════════════════");
+    log::info!("❌ CANCEL RECORDING");
+    log::info!("═══════════════════════════════════════════════");
+
+    // Call backend /cancel
+    let client = reqwest::Client::new();
+    tokio::spawn(async move {
+        match client.post("http://127.0.0.1:8000/cancel")
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => log::info!("✅ Backend cancelled"),
+            Ok(resp) => log::error!("❌ Backend error: {}", resp.status()),
+            Err(e) => log::error!("❌ Request failed: {}", e),
+        }
+    });
+
+    // Hide window
+    if let Some(win) = app.get_webview_window("recording") {
+        win.hide().map_err(|e| e.to_string())?;
+        log::info!("✅ Window hidden");
+    }
+
+    Ok(())
+}
+
 // Simple command: Stop recording (called by F9 when window visible)
 #[tauri::command]
 async fn cmd_stop_recording(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
@@ -273,6 +306,7 @@ async fn cmd_stop_recording(app: AppHandle, state: State<'_, AppState>) -> Resul
     // Call showProcessing() in the recording window via eval
     if let Some(win) = app.get_webview_window("recording") {
         let _ = win.eval("showProcessing()");
+        let _ = win.eval("playStopSound()");
         log::info!("📢 Called showProcessing() in frontend");
     }
 
@@ -492,7 +526,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             let app_clone = app.clone();
             tauri::async_runtime::spawn(async move {
                 let state: tauri::State<AppState> = app_clone.state();
-                if let Some(mut child) = state.backend_child.lock().await.take() {
+                if let Some(child) = state.backend_child.lock().await.take() {
                     log::info!("🛑 Killing backend process...");
                     let _ = child.kill();
                     log::info!("✅ Backend process terminated");
@@ -583,30 +617,52 @@ pub fn run() {
 
             log::info!("✅ Tray icon created");
 
-            // F9 shortcut
-            let shortcut = Shortcut::new(None, Code::F9);
+            // Global shortcuts (F9 and Escape)
+            let f9_shortcut = Shortcut::new(None, Code::F9);
+            let esc_shortcut = Shortcut::new(None, Code::Escape);
             let app_handle_hotkey = app.handle().clone();
 
             app.handle().plugin(
                 tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |_app, _shortcut, event| {
+                    .with_handler(move |_app, shortcut, event| {
                         use tauri_plugin_global_shortcut::ShortcutState;
                         // Only trigger on key press, not release
                         if event.state == ShortcutState::Pressed {
-                            log::info!("🔥 F9 TRIGGERED");
-                            let app_clone = app_handle_hotkey.clone();
-                            tauri::async_runtime::spawn(async move {
-                                let _ = cmd_toggle_recording(app_clone.clone(), app_clone.state()).await;
-                            });
+                            let shortcut_str = format!("{:?}", shortcut);
+
+                            if shortcut_str.contains("Escape") {
+                                log::info!("🔥 ESCAPE TRIGGERED");
+                                let app_clone = app_handle_hotkey.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    // Only cancel if recording window is visible
+                                    if let Some(win) = app_clone.get_webview_window("recording") {
+                                        if win.is_visible().unwrap_or(false) {
+                                            let _ = cmd_cancel_recording(app_clone).await;
+                                        }
+                                    }
+                                });
+                            } else {
+                                log::info!("🔥 F9 TRIGGERED");
+                                let app_clone = app_handle_hotkey.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = cmd_toggle_recording(app_clone.clone(), app_clone.state()).await;
+                                });
+                            }
                         }
                     })
                     .build()
             )?;
 
-            if let Err(e) = app.global_shortcut().register(shortcut) {
+            if let Err(e) = app.global_shortcut().register(f9_shortcut) {
                 log::error!("❌ Failed to register F9: {}", e);
             } else {
                 log::info!("✅ F9 shortcut registered");
+            }
+
+            if let Err(e) = app.global_shortcut().register(esc_shortcut) {
+                log::error!("❌ Failed to register Escape: {}", e);
+            } else {
+                log::info!("✅ Escape shortcut registered");
             }
 
             log::info!("💡 Press F9 to start/stop recording");
@@ -617,6 +673,7 @@ pub fn run() {
             inject_text_directly,
             cmd_start_recording,
             cmd_stop_recording,
+            cmd_cancel_recording,
             cmd_toggle_recording,
             set_model_and_device,
             set_microphone_device,

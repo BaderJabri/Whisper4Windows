@@ -11,6 +11,7 @@ backend/.pytest_cache/
 backend/*.egg-info/
 backend/dist/
 backend/build/
+backend/*.spec
 
 # Whisper models (large files) - exclude ALL models
 # Users will download them automatically on first run (~500MB for small model)
@@ -23,6 +24,7 @@ backend/recordings/
 
 # Rust/Tauri
 frontend/src-tauri/target/
+frontend/src-tauri/binaries/
 frontend/node_modules/
 **/Cargo.lock
 

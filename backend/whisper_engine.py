@@ -5,11 +5,26 @@ Handles model loading and transcription using faster-whisper
 
 import logging
 import os
+import sys
 from typing import Optional, Dict, List
 import numpy as np
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Get the appropriate models directory
+def get_models_dir() -> Path:
+    """Get the models directory, using AppData for bundled apps"""
+    if getattr(sys, 'frozen', False):
+        # Running as bundled executable
+        appdata = Path(os.getenv('APPDATA') or os.path.expanduser('~'))
+        models_dir = appdata / 'Whisper4Windows' / 'models'
+    else:
+        # Running from source
+        models_dir = Path("models")
+
+    models_dir.mkdir(parents=True, exist_ok=True)
+    return models_dir
 
 # Try to import faster-whisper
 try:
@@ -89,7 +104,7 @@ class WhisperEngine:
         if model_size is None:
             model_size = self.model_size
             
-        models_dir = Path("models")
+        models_dir = get_models_dir()
         model_path = models_dir / f"models--Systran--faster-whisper-{model_size}"
         
         # Check if model directory exists and has required files
@@ -123,8 +138,7 @@ class WhisperEngine:
             logger.info(f"   Compute type: {self.compute_type}")
             
             # Create models directory if it doesn't exist
-            models_dir = Path("models")
-            models_dir.mkdir(exist_ok=True)
+            models_dir = get_models_dir()
             
             # Try to load model
             try:

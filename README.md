@@ -173,6 +173,7 @@ python main.py
 ## 📚 Learn More
 
 - **[INSTALLATION.md](INSTALLATION.md)** - Detailed setup guide
+- **[BUILD.md](BUILD.md)** - Building MSI installer for distribution
 - **[TECHNICAL.md](TECHNICAL.md)** - Technical documentation for developers
 - **[DEVELOPMENT_MODE.md](DEVELOPMENT_MODE.md)** - Development workflow guide
 

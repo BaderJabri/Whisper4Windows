@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Whisper4Windows - Settings</title>
+    <title>Whisper4Windows</title>
     <style>
         * {
             margin: 0;
@@ -11,19 +11,43 @@
             box-sizing: border-box;
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
+        :root[data-theme="light"] {
+            --bg-main: #f5f5f5;
+            --bg-sidebar: #f0f0f0;
+            --bg-card: #ffffff;
+            --border-color: #e0e0e0;
+            --text-primary: #2a2a2a;
+            --text-secondary: #666;
+            --text-sidebar: #666;
+            --sidebar-active: #e0e0e0;
+            --sidebar-hover: #e8e8e8;
+            --scrollbar-thumb: #c0c0c0;
+            --scrollbar-track: #f5f5f5;
         }
 
-<<<<<<< Updated upstream
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-=======
+        :root[data-theme="dark"] {
+            --bg-main: #1a1a1a;
+            --bg-sidebar: #2a2a2a;
+            --bg-card: #2d2d2d;
+            --border-color: #3a3a3a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --text-sidebar: #a0a0a0;
+            --sidebar-active: #404040;
+            --sidebar-hover: #363636;
+            --scrollbar-thumb: #4a4a4a;
+            --scrollbar-track: #1a1a1a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-sidebar);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 12px;
@@ -145,13 +169,15 @@
         }
 
         .card-badge {
-            background: #f0f0f0;
-            color: #666;
+            background: var(--bg-card);
+            color: var(--text-primary);
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 12px;
             font-weight: 600;
             white-space: nowrap;
+            border: 1px solid var(--border-color);
+            font-family: 'Courier New', monospace;
         }
 
         /* What's New Section */
@@ -259,14 +285,14 @@
 
         /* Shortcut Badge */
         .shortcut-badge {
-            background: #3a3a3a;
-            color: #e0e0e0;
+            background: var(--bg-card);
+            color: var(--text-primary);
             padding: 8px 14px;
             border-radius: 6px;
             font-size: 13px;
             font-weight: 600;
             font-family: 'Courier New', monospace;
-            border: 1px solid #4a4a4a;
+            border: 1px solid var(--border-color);
             min-width: 80px;
             text-align: center;
             cursor: pointer;
@@ -274,7 +300,7 @@
         }
 
         .shortcut-badge:hover {
-            background: #4a4a4a;
+            border-color: #667eea;
         }
 
         .shortcut-badge.disabled {
@@ -310,97 +336,107 @@
             border-color: #667eea;
         }
 
-        /* Microphone selector specific styling */
-        #microphoneSelector {
-            max-width: 280px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* Language Dropdown Styles */
-        .language-dropdown-container {
+        /* Custom Dropdown */
+        .custom-dropdown {
             position: relative;
-            width: 250px;
+            min-width: 250px;
         }
 
-        .language-search-input {
-            width: 100%;
-            padding: 8px 32px 8px 12px;
+        .dropdown-header {
+            padding: 10px 36px 10px 14px;
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            font-size: 14px;
             background: var(--bg-card);
             color: var(--text-primary);
             cursor: pointer;
-            background-image: url('data:image/svg+xml;charset=UTF-8,<svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L6 6L11 1" stroke="%23666" stroke-width="2" stroke-linecap="round"/></svg>');
-            background-repeat: no-repeat;
-            background-position: right 12px center;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: border-color 0.2s;
+            position: relative;
         }
 
-        .language-search-input:focus {
-            outline: none;
+        .dropdown-header:hover {
             border-color: #667eea;
         }
 
-        .language-dropdown {
+        .dropdown-header::after {
+            content: '▼';
             position: absolute;
-            top: 100%;
+            right: 12px;
+            font-size: 10px;
+            opacity: 0.6;
+            transition: transform 0.2s;
+        }
+
+        .dropdown-header.open::after {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-content {
+            position: absolute;
+            top: calc(100% + 4px);
             left: 0;
             right: 0;
-            margin-top: 4px;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             max-height: 300px;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
         }
 
-        .language-search-filter {
-            width: calc(100% - 24px);
+        .dropdown-content.show {
+            display: block;
+        }
+
+        .dropdown-search {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+            z-index: 1;
+        }
+
+        .dropdown-search input {
+            width: 100%;
             padding: 8px 12px;
-            margin: 8px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 13px;
             background: var(--bg-main);
             color: var(--text-primary);
+            font-size: 13px;
         }
 
-        .language-search-filter:focus {
+        .dropdown-search input:focus {
             outline: none;
             border-color: #667eea;
         }
 
-        .language-list {
-            overflow-y: auto;
-            max-height: 250px;
-        }
-
-        .language-option {
-            padding: 10px 12px;
+        .dropdown-option {
+            padding: 10px 14px;
             cursor: pointer;
             font-size: 14px;
             color: var(--text-primary);
-            transition: background 0.2s;
+            transition: background 0.15s;
         }
 
-        .language-option:hover {
+        .dropdown-option:hover {
             background: var(--sidebar-hover);
         }
 
-        .language-option.selected {
+        .dropdown-option.selected {
             background: #667eea;
             color: white;
         }
 
-        .language-option.pinned {
-            font-weight: 600;
+        .dropdown-option.pinned {
             border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
         }
 
         /* Button Styles */
@@ -447,238 +483,253 @@
             position: absolute;
             width: 22px;
             height: 22px;
->>>>>>> Stashed changes
             background: white;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            transition: left 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            left: 25px;
+        }
+
+        /* Reset Icon */
+        .reset-icon {
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            font-size: 16px;
+        }
+
+        .reset-icon:hover {
+            opacity: 1;
+        }
+
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: #e8f5e9;
+            border: 1px solid #c3e6cb;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #155724;
+            font-weight: 500;
+        }
+
+        .status-indicator.offline {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        /* Coming Soon Badge */
+        .coming-soon {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
             border-radius: 12px;
             padding: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
         }
 
-        h1 {
-            color: #667eea;
-            margin-bottom: 10px;
-            font-size: 28px;
+        .coming-soon h3 {
+            font-size: 18px;
+            color: #856404;
+            margin-bottom: 8px;
         }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
+        .coming-soon p {
+            color: #856404;
             font-size: 14px;
         }
 
-        .section {
-            margin-bottom: 25px;
+        /* Hidden class */
+        .hidden {
+            display: none !important;
         }
 
-        .section h3 {
-            color: #333;
-            margin-bottom: 12px;
-            font-size: 16px;
-            font-weight: 600;
+        /* Device Buttons */
+        .device-buttons {
+            display: flex;
+            gap: 8px;
         }
 
-        textarea {
-            width: 100%;
-            min-height: 100px;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
+        .device-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
             border-radius: 8px;
-            font-family: inherit;
-            font-size: 14px;
-            resize: vertical;
-            transition: border-color 0.3s;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
         }
 
-        textarea:focus {
-            outline: none;
+        .device-btn:hover {
             border-color: #667eea;
         }
 
-        .button-group {
+        .device-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Volume Slider */
+        .volume-slider {
+            width: 100%;
+            max-width: 300px;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border-color);
+            outline: none;
+            appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Shortcut Capture Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .modal h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .modal p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .modal-buttons {
             display: flex;
             gap: 10px;
-            margin-top: 15px;
-        }
-
-        button {
-            flex: 1;
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            background: #5568d3;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        button.secondary {
-            background: #764ba2;
-        }
-
-        button.secondary:hover {
-            background: #653a8a;
-        }
-
-        .status {
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 15px;
-            display: none;
-            font-size: 14px;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .info-box {
-            background: #e3f2fd;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #2196f3;
-            margin-bottom: 25px;
-        }
-
-        .info-box h4 {
-            margin-bottom: 8px;
-            color: #1976d2;
-            font-size: 14px;
-        }
-
-        .info-box p {
-            font-size: 13px;
-            line-height: 1.5;
-            color: #555;
-        }
-
-        .badge {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-left: 8px;
+            justify-content: center;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎙️ Whisper4Windows</h1>
-        <p class="subtitle">Local Speech-to-Text for Windows</p>
-
-        <div class="info-box">
-            <h4>🎤 Speech-to-Text</h4>
-            <p>Backend Status: <span id="backendStatus" style="font-weight: 600;">Checking...</span></p>
-            <p style="font-size: 12px; margin-top: 5px;">
-                <strong>Hotkey:</strong> Press <kbd style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; border: 1px solid #ccc;">Alt+T</kbd> anywhere to start/stop recording!<br>
-                Or use buttons below to record manually.
-            </p>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-item active" onclick="navigateToPage('home')">
+            <span class="sidebar-item-icon">🏠</span>
+            Home
         </div>
+        <div class="sidebar-item" onclick="navigateToPage('vocabulary')">
+            <span class="sidebar-item-icon">📖</span>
+            Vocabulary
+        </div>
+        <div class="sidebar-item" onclick="navigateToPage('configuration')">
+            <span class="sidebar-item-icon">⚙️</span>
+            Configuration
+        </div>
+        <div class="sidebar-item" onclick="navigateToPage('sound')">
+            <span class="sidebar-item-icon">🔊</span>
+            Sound
+        </div>
+        <div class="sidebar-item" onclick="navigateToPage('history')">
+            <span class="sidebar-item-icon">🕐</span>
+            History
+        </div>
+    </div>
 
-        <div class="section">
-            <h3>🎤 Speech-to-Text <span class="badge" style="background: #28a745;">SIMPLE MODE</span></h3>
-            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
-                Click START, speak, then click STOP. Transcription happens when you stop!
-            </p>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 13px; font-weight: 600; color: #444;">Model Quality:</label>
-                <select id="modelSelector" style="margin-left: 10px; padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
-                    <option value="tiny">⚡ Tiny (Fastest, Lower Accuracy)</option>
-                    <option value="base">🔷 Base (Fast, Decent Accuracy)</option>
-                    <option value="small" selected>✨ Small (Balanced - RECOMMENDED)</option>
-                    <option value="medium">🎯 Medium (Slower, High Accuracy)</option>
-                    <option value="large-v3">🚀 Large V3 (Best Quality, Slowest)</option>
-                </select>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 13px; font-weight: 600; color: #444;">Processing Device:</label>
-                <div style="display: inline-flex; margin-left: 10px; border: 1px solid #ddd; border-radius: 4px; overflow: hidden;">
-                    <button id="deviceAuto" onclick="selectDevice('auto')" style="padding: 5px 15px; border: none; background: #667eea; color: white; cursor: pointer; font-size: 12px; border-radius: 0;">
-                        🔄 Auto
-                    </button>
-                    <button id="deviceGPU" onclick="selectDevice('cuda')" style="padding: 5px 15px; border: none; background: white; color: #333; cursor: pointer; font-size: 12px; border-left: 1px solid #ddd; border-radius: 0;">
-                        ⚡ GPU
-                    </button>
-                    <button id="deviceCPU" onclick="selectDevice('cpu')" style="padding: 5px 15px; border: none; background: white; color: #333; cursor: pointer; font-size: 12px; border-left: 1px solid #ddd; border-radius: 0;">
-                        💻 CPU
-                    </button>
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- HOME PAGE -->
+        <div id="page-home" class="page">
+            <h1 class="section-title">Get started</h1>
+
+            <div class="cards-grid">
+                <div class="card" onclick="navigateToPage('configuration')">
+                    <span class="card-icon">⏺</span>
+                    <div class="card-content">
+                        <div class="card-title">Start recording</div>
+                        <div class="card-description">Turn your voice to text with a single click.</div>
+                    </div>
+                    <div class="card-badge">F9</div>
                 </div>
-                <small id="deviceHint" style="display: block; margin-top: 5px; color: #666; font-size: 11px;">
-                    Auto: Tries GPU first, falls back to CPU if needed
-                </small>
+
+                <div class="card" onclick="navigateToPage('configuration', 'shortcuts')">
+                    <span class="card-icon">✋</span>
+                    <div class="card-content">
+                        <div class="card-title">Customize your shortcuts</div>
+                        <div class="card-description">Change the keyboard shortcuts for Whisper4Windows.</div>
+                    </div>
+                </div>
+
+                <div class="card" onclick="navigateToPage('vocabulary')">
+                    <span class="card-icon">📖</span>
+                    <div class="card-content">
+                        <div class="card-title">Add vocabulary</div>
+                        <div class="card-description">Teach Whisper4Windows custom words, names, or industry terms.</div>
+                    </div>
+                </div>
             </div>
 
-            <div style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
-                <label style="font-size: 13px; font-weight: 600; color: #444; display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" id="clipboardPasteToggle" checked onchange="toggleClipboardPaste()" style="width: 18px; height: 18px; margin-right: 10px; cursor: pointer;">
-                    <span>📋 Save transcribed text to clipboard</span>
-                </label>
-                <small style="display: block; margin-top: 6px; margin-left: 28px; color: #666; font-size: 11px;">
-                    Text is always injected into the active text field. When this is enabled, the text also stays in your clipboard for you to paste elsewhere. When disabled, your original clipboard content is preserved.
-                </small>
+            <div class="whats-new-header">
+                <h2>What's new?</h2>
+                <a href="#" class="view-all-link">View all changes</a>
             </div>
-<<<<<<< Updated upstream
-            
-            <div class="button-group">
-                <button id="liveStartBtn" onclick="startLiveRecording()" style="background: #28a745;">▶️ START Recording</button>
-                <button id="liveStopBtn" onclick="stopLiveRecording()" style="background: #dc3545; display: none;">⏹️ STOP Recording</button>
-=======
 
             <div class="changelog-item">
                 <div class="changelog-date">Oct 2, 2025</div>
-                <div class="changelog-title">Editable Global Hotkeys & Live Audio Visualization</div>
+                <div class="changelog-title">F9 Global Hotkey & Live Audio Visualization</div>
                 <div class="changelog-description">
                     Press F9 from anywhere to start/stop recording. New 80-bar live audio visualizer shows real-time feedback during recording, with smooth wave animation during processing.
                 </div>
->>>>>>> Stashed changes
             </div>
-            
-            <div id="liveStatus" class="status"></div>
-            <div id="liveTranscription" style="margin-top: 15px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #28a745; display: none;">
-                <strong style="color: #28a745;">🎙️ LIVE: </strong>
-                <p id="liveText" style="margin: 10px 0; font-size: 16px; line-height: 1.8; font-weight: 500;"></p>
-                <small style="color: #666;" id="liveMeta">Listening...</small>
+
+            <div class="changelog-item">
+                <div class="changelog-date">Oct 1, 2025</div>
+                <div class="changelog-title">GPU Acceleration & Fast Text Injection</div>
+                <div class="changelog-description">
+                    10x faster transcription with NVIDIA GPU support. Text now injects instantly via clipboard paste instead of character-by-character. Global Esc key cancels recording anytime.
+                </div>
             </div>
         </div>
 
-<<<<<<< Updated upstream
-=======
         <!-- VOCABULARY PAGE -->
         <div id="page-vocabulary" class="page hidden">
             <h1 class="section-title">Vocabulary</h1>
@@ -753,13 +804,14 @@
                         <div class="config-row-description">Transcription accuracy vs speed</div>
                     </div>
                     <div class="config-row-right">
-                        <select id="modelSelector" onchange="saveSettings()">
-                            <option value="tiny">Tiny (Fastest)</option>
-                            <option value="base">Base</option>
-                            <option value="small" selected>Small (Recommended)</option>
-                            <option value="medium">Medium</option>
-                            <option value="large-v3">Large V3 (Best)</option>
-                        </select>
+                        <div class="custom-dropdown" id="modelDropdown">
+                            <div class="dropdown-header" onclick="toggleModelDropdown()">
+                                <span id="selectedModel">Small (Recommended)</span>
+                            </div>
+                            <div class="dropdown-content" id="modelDropdownContent">
+                                <div id="modelOptions"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -790,24 +842,18 @@
                 <div class="config-row">
                     <div class="config-row-left">
                         <div class="config-row-title">Language</div>
-                        <div class="config-row-description">Select language for transcription</div>
+                        <div class="config-row-description">Select transcription language</div>
                     </div>
                     <div class="config-row-right">
-                        <div class="language-dropdown-container">
-                            <input type="text"
-                                   id="languageSearch"
-                                   class="language-search-input"
-                                   placeholder="Search languages..."
-                                   autocomplete="off"
-                                   readonly
-                                   onclick="toggleLanguageDropdown()">
-                            <div id="languageDropdown" class="language-dropdown hidden">
-                                <input type="text"
-                                       id="languageSearchFilter"
-                                       class="language-search-filter"
-                                       placeholder="Type to search..."
-                                       onkeyup="filterLanguages()">
-                                <div id="languageList" class="language-list"></div>
+                        <div class="custom-dropdown" id="languageDropdown">
+                            <div class="dropdown-header" onclick="toggleLanguageDropdown()">
+                                <span id="selectedLanguage">English</span>
+                            </div>
+                            <div class="dropdown-content" id="languageDropdownContent">
+                                <div class="dropdown-search">
+                                    <input type="text" placeholder="Search languages..." id="languageSearch" oninput="filterLanguages()">
+                                </div>
+                                <div id="languageOptions"></div>
                             </div>
                         </div>
                     </div>
@@ -824,11 +870,14 @@
                         <div class="config-row-description">Interface color scheme</div>
                     </div>
                     <div class="config-row-right">
-                        <select id="themeSelector" onchange="changeTheme()">
-                            <option value="system">System</option>
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                        </select>
+                        <div class="custom-dropdown" id="themeDropdown">
+                            <div class="dropdown-header" onclick="toggleThemeDropdown()">
+                                <span id="selectedTheme">System</span>
+                            </div>
+                            <div class="dropdown-content" id="themeDropdownContent">
+                                <div id="themeOptions"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -873,9 +922,14 @@
                         <div class="config-row-description">Select microphone input</div>
                     </div>
                     <div class="config-row-right">
-                        <select id="microphoneSelector" onchange="saveMicrophoneDevice()">
-                            <option value="default">Default Microphone</option>
-                        </select>
+                        <div class="custom-dropdown" id="microphoneDropdown">
+                            <div class="dropdown-header" onclick="toggleMicrophoneDropdown()">
+                                <span id="selectedMicrophone">Default Microphone</span>
+                            </div>
+                            <div class="dropdown-content" id="microphoneDropdownContent">
+                                <div id="microphoneOptions"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -936,25 +990,264 @@
                 <button class="btn" onclick="cancelShortcutCapture()">Cancel</button>
             </div>
         </div>
->>>>>>> Stashed changes
     </div>
 
     <script>
-        // Backend communication
         const BACKEND_URL = 'http://127.0.0.1:8000';
-<<<<<<< Updated upstream
-=======
         let selectedDevice = 'auto';
         let clipboardPasteEnabled = true;
         let launchOnLogin = false;
         let autoVolumeEnabled = true;
         let soundEffectsEnabled = true;
         let volume = 80;
-        let selectedLanguage = 'en'; // Default to English
+        let preferredLanguages = [];
 
-        // All 99 languages supported by Whisper
-        const allLanguages = [
-            { code: 'auto', name: 'Auto-Detect' },
+        // Sound Effects using Web Audio API
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playBeep(frequency, duration, volume) {
+            if (!soundEffectsEnabled) return;
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+
+            const adjustedVolume = (volume / 100) * 0.3; // Max 30% volume
+            gainNode.gain.setValueAtTime(adjustedVolume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playStartSound() {
+            playBeep(800, 0.1, volume); // Higher pitch, short beep
+        }
+
+        function playStopSound() {
+            playBeep(400, 0.15, volume); // Lower pitch, slightly longer beep
+        }
+
+        // Shortcut state
+        let shortcuts = {
+            toggle: 'F9',
+            cancel: 'Escape'
+        };
+        let capturingShortcut = null;
+        let capturedKeys = [];
+
+        // Page Navigation
+        function navigateToPage(pageName, section) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.add('hidden');
+            });
+
+            document.getElementById(`page-${pageName}`).classList.remove('hidden');
+
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`.sidebar-item[onclick*="${pageName}"]`).classList.add('active');
+
+            if (section) {
+                setTimeout(() => {
+                    const sectionEl = document.getElementById(`section-${section}`);
+                    if (sectionEl) {
+                        sectionEl.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 100);
+            }
+        }
+
+        // Theme Management
+        function changeTheme() {
+            const theme = selectedThemeValue;
+            let appliedTheme = theme;
+
+            if (theme === 'system') {
+                const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                appliedTheme = isDark ? 'dark' : 'light';
+            }
+
+            document.documentElement.setAttribute('data-theme', appliedTheme);
+            localStorage.setItem('theme', theme);
+        }
+
+        // Shortcut Capture
+        function captureShortcut(type) {
+            capturingShortcut = type;
+            capturedKeys = [];
+            document.getElementById('shortcutModal').classList.remove('hidden');
+            document.getElementById('modalShortcut').textContent = 'Listening...';
+        }
+
+        function cancelShortcutCapture() {
+            capturingShortcut = null;
+            capturedKeys = [];
+            document.getElementById('shortcutModal').classList.add('hidden');
+        }
+
+        function resetShortcut(type) {
+            const defaults = { toggle: 'F9', cancel: 'Escape' };
+            shortcuts[type] = defaults[type];
+            document.getElementById(`shortcut-${type}`).textContent = defaults[type];
+            saveShortcuts();
+        }
+
+        async function saveShortcuts() {
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('save_shortcuts', { shortcuts: shortcuts });
+                console.log('✅ Shortcuts saved:', shortcuts);
+            } catch (error) {
+                console.error('❌ Error saving shortcuts:', error);
+            }
+        }
+
+        // Key capture logic
+        document.addEventListener('keydown', (e) => {
+            if (!capturingShortcut) return;
+
+            e.preventDefault();
+
+            const key = e.key;
+            const modifiers = [];
+
+            if (e.ctrlKey) modifiers.push('Ctrl');
+            if (e.altKey) modifiers.push('Alt');
+            if (e.shiftKey) modifiers.push('Shift');
+
+            // Don't add modifier keys themselves
+            if (['Control', 'Alt', 'Shift'].includes(key)) return;
+
+            // Build shortcut string
+            const shortcutParts = [...modifiers, key];
+            const shortcut = shortcutParts.join('+');
+
+            // Update display
+            document.getElementById('modalShortcut').textContent = shortcut;
+
+            // Save after short delay
+            setTimeout(() => {
+                shortcuts[capturingShortcut] = shortcut;
+                document.getElementById(`shortcut-${capturingShortcut}`).textContent = shortcut;
+                saveShortcuts();
+                cancelShortcutCapture();
+            }, 500);
+        });
+
+        // Backend Health Check
+        async function checkBackendHealth() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+
+                const statusEl = document.getElementById('backendStatus');
+                statusEl.innerHTML = `<span>✅</span><span>${data.backend.toUpperCase()} Ready (${data.model})</span>`;
+                statusEl.classList.remove('offline');
+            } catch (error) {
+                const statusEl = document.getElementById('backendStatus');
+                statusEl.innerHTML = `<span>❌</span><span>Backend Offline</span>`;
+                statusEl.classList.add('offline');
+            }
+        }
+
+        // Device Selection
+        function selectDevice(device) {
+            selectedDevice = device;
+
+            const buttons = {
+                'auto': document.getElementById('deviceAuto'),
+                'cuda': document.getElementById('deviceGPU'),
+                'cpu': document.getElementById('deviceCPU')
+            };
+
+            Object.values(buttons).forEach(btn => btn.classList.remove('active'));
+            buttons[device].classList.add('active');
+
+            saveSettings();
+        }
+
+        // Toggle Functions
+        async function toggleClipboardPaste() {
+            const toggle = document.getElementById('clipboardToggle');
+            clipboardPasteEnabled = !clipboardPasteEnabled;
+
+            if (clipboardPasteEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_clipboard_paste', { enabled: clipboardPasteEnabled });
+            } catch (error) {
+                console.error('❌ Error setting clipboard paste:', error);
+            }
+        }
+
+        async function toggleLaunchOnLogin() {
+            const toggle = document.getElementById('launchOnLoginToggle');
+            launchOnLogin = !launchOnLogin;
+
+            if (launchOnLogin) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_launch_on_login', { enabled: launchOnLogin });
+            } catch (error) {
+                console.error('❌ Error setting launch on login:', error);
+            }
+        }
+
+        function toggleAutoVolume() {
+            const toggle = document.getElementById('autoVolumeToggle');
+            autoVolumeEnabled = !autoVolumeEnabled;
+
+            if (autoVolumeEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            localStorage.setItem('autoVolume', autoVolumeEnabled);
+        }
+
+        function toggleSoundEffects() {
+            const toggle = document.getElementById('soundEffectsToggle');
+            soundEffectsEnabled = !soundEffectsEnabled;
+
+            if (soundEffectsEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            localStorage.setItem('soundEffects', soundEffectsEnabled);
+        }
+
+        function updateVolume() {
+            volume = document.getElementById('volumeSlider').value;
+            localStorage.setItem('volume', volume);
+        }
+
+        // Language dropdown data (99 Whisper languages)
+        const LANGUAGES = [
+            { code: 'auto', name: 'Auto-Detect', pinned: true },
             { code: 'en', name: 'English' },
             { code: 'zh', name: 'Chinese' },
             { code: 'de', name: 'German' },
@@ -1055,249 +1348,72 @@
             { code: 'jw', name: 'Javanese' },
             { code: 'su', name: 'Sundanese' }
         ];
->>>>>>> Stashed changes
 
-        async function checkBackendHealth() {
-            try {
-                console.log('🔍 Checking backend health at:', `${BACKEND_URL}/health`);
-                const response = await fetch(`${BACKEND_URL}/health`, {
-                    method: 'GET',
-                    mode: 'cors',
-                    headers: {
-                        'Accept': 'application/json'
-                    }
-                });
-                console.log('📡 Response status:', response.status);
-                const data = await response.json();
-                console.log('📦 Response data:', data);
-                document.getElementById('backendStatus').textContent = `✅ ${data.backend.toUpperCase()} (${data.model})`;
-                document.getElementById('backendStatus').style.color = '#155724';
-                return true;
-            } catch (error) {
-                document.getElementById('backendStatus').textContent = '❌ Offline';
-                document.getElementById('backendStatus').style.color = '#721c24';
-                console.error('❌ Backend health check failed:', error);
-                console.error('Error details:', error.message, error.stack);
-                return false;
-            }
-        }
+        let selectedLanguageCode = 'en';
 
+        function initializeLanguageDropdown() {
+            const optionsContainer = document.getElementById('languageOptions');
+            optionsContainer.innerHTML = '';
 
-        // Device selection
-        let selectedDevice = 'auto';
-        let clipboardPasteEnabled = true;
-        
-        function selectDevice(device) {
-            selectedDevice = device;
-            
-            // Update button styles
-            const buttons = {
-                'auto': document.getElementById('deviceAuto'),
-                'cuda': document.getElementById('deviceGPU'),
-                'cpu': document.getElementById('deviceCPU')
-            };
-            
-            // Reset all buttons
-            Object.values(buttons).forEach(btn => {
-                btn.style.background = 'white';
-                btn.style.color = '#333';
-            });
-            
-            // Highlight selected
-            buttons[device].style.background = '#667eea';
-            buttons[device].style.color = 'white';
-            
-            // Update hint text
-            const hints = {
-                'auto': 'Auto: Tries GPU first, falls back to CPU if needed',
-                'cuda': 'GPU: Fast transcription using NVIDIA GPU (requires cuDNN)',
-                'cpu': 'CPU: Slower but always works (no GPU required)'
-            };
-            document.getElementById('deviceHint').textContent = hints[device];
-            
-            // Save to backend state
-            saveSettings();
-        }
-
-        // Toggle clipboard paste setting
-        async function toggleClipboardPaste() {
-            const toggle = document.getElementById('clipboardPasteToggle');
-            clipboardPasteEnabled = toggle.checked;
-            
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_clipboard_paste', { enabled: clipboardPasteEnabled });
-                console.log(`✅ Clipboard paste ${clipboardPasteEnabled ? 'enabled' : 'disabled'}`);
-            } catch (error) {
-                console.error('❌ Error setting clipboard paste:', error);
-            }
-        }
-<<<<<<< Updated upstream
-        
-        // Save current settings to backend
-=======
-
-        async function toggleLaunchOnLogin() {
-            const toggle = document.getElementById('launchOnLoginToggle');
-            launchOnLogin = !launchOnLogin;
-
-            if (launchOnLogin) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_launch_on_login', { enabled: launchOnLogin });
-            } catch (error) {
-                console.error('❌ Error setting launch on login:', error);
-            }
-        }
-
-        function toggleAutoVolume() {
-            const toggle = document.getElementById('autoVolumeToggle');
-            autoVolumeEnabled = !autoVolumeEnabled;
-
-            if (autoVolumeEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-
-            localStorage.setItem('autoVolume', autoVolumeEnabled);
-        }
-
-        function toggleSoundEffects() {
-            const toggle = document.getElementById('soundEffectsToggle');
-            soundEffectsEnabled = !soundEffectsEnabled;
-
-            if (soundEffectsEnabled) {
-                toggle.classList.add('active');
-            } else {
-                toggle.classList.remove('active');
-            }
-
-            localStorage.setItem('soundEffects', soundEffectsEnabled);
-        }
-
-        function updateVolume() {
-            volume = document.getElementById('volumeSlider').value;
-            localStorage.setItem('volume', volume);
-        }
-
-        async function loadAudioDevices() {
-            try {
-                console.log('🎤 Loading audio devices...');
-                const response = await fetch(`${BACKEND_URL}/devices`);
-                const data = await response.json();
-
-                if (data.success && data.inputs && data.inputs.length > 0) {
-                    const selector = document.getElementById('microphoneSelector');
-
-                    // Clear existing options
-                    selector.innerHTML = '';
-
-                    // Add each input device
-                    data.inputs.forEach(device => {
-                        const option = document.createElement('option');
-                        option.value = device.id;
-                        
-                        // Truncate long device names to prevent overflow
-                        const maxLength = 35; // Adjust based on your needs
-                        const displayName = device.name.length > maxLength 
-                            ? device.name.substring(0, maxLength) + '...' 
-                            : device.name;
-                        
-                        option.textContent = displayName;
-                        option.title = device.name; // Show full name on hover
-                        selector.appendChild(option);
-                    });
-
-                    // Restore previously selected device
-                    const savedDevice = localStorage.getItem('selectedMicrophone');
-                    if (savedDevice !== null) {
-                        selector.value = savedDevice;
-                    }
-
-                    console.log(`✅ Loaded ${data.inputs.length} input devices`);
-                } else {
-                    console.warn('⚠️ No input devices found, keeping default option');
-                }
-            } catch (error) {
-                console.error('❌ Error loading audio devices:', error);
-                // Keep the default "Default Microphone" option on error
-            }
-        }
-
-        async function saveMicrophoneDevice() {
-            const selector = document.getElementById('microphoneSelector');
-            const deviceId = selector.value;
-
-            // Parse device ID as integer or null for default
-            const deviceIndex = deviceId === 'default' ? null : parseInt(deviceId);
-
-            // Save to localStorage
-            localStorage.setItem('selectedMicrophone', deviceId);
-
-            // Save to Tauri state
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_microphone_device', { deviceIndex: deviceIndex });
-                console.log(`✅ Saved microphone device: ${deviceId} (${selector.options[selector.selectedIndex].text})`);
-            } catch (error) {
-                console.error('❌ Error saving microphone device:', error);
-            }
-        }
-
-        // Language Dropdown Functions
-        function initLanguageDropdown() {
-            const languageList = document.getElementById('languageList');
-            languageList.innerHTML = '';
-
-            // Add Auto-Detect (pinned at top)
-            const autoOption = document.createElement('div');
-            autoOption.className = 'language-option pinned';
-            autoOption.textContent = 'Auto-Detect';
-            autoOption.dataset.code = 'auto';
-            autoOption.onclick = () => selectLanguage('auto', 'Auto-Detect');
-            languageList.appendChild(autoOption);
-
-            // Add all other languages (skip auto as it's already added)
-            allLanguages.slice(1).forEach(lang => {
+            LANGUAGES.forEach(lang => {
                 const option = document.createElement('div');
-                option.className = 'language-option';
+                option.className = 'dropdown-option' + (lang.pinned ? ' pinned' : '');
                 option.textContent = lang.name;
                 option.dataset.code = lang.code;
-                option.onclick = () => selectLanguage(lang.code, lang.name);
-                languageList.appendChild(option);
-            });
+                option.dataset.name = lang.name;
 
-            // Set default to English
-            updateLanguageDisplay();
+                if (lang.code === selectedLanguageCode) {
+                    option.classList.add('selected');
+                }
+
+                option.onclick = () => selectLanguage(lang.code, lang.name);
+                optionsContainer.appendChild(option);
+            });
         }
 
         function toggleLanguageDropdown() {
-            const dropdown = document.getElementById('languageDropdown');
-            const filter = document.getElementById('languageSearchFilter');
+            const header = document.querySelector('#languageDropdown .dropdown-header');
+            const content = document.getElementById('languageDropdownContent');
+            const searchInput = document.getElementById('languageSearch');
 
-            if (dropdown.classList.contains('hidden')) {
-                dropdown.classList.remove('hidden');
-                setTimeout(() => filter.focus(), 100);
-            } else {
-                dropdown.classList.add('hidden');
-                filter.value = '';
+            header.classList.toggle('open');
+            content.classList.toggle('show');
+
+            if (content.classList.contains('show')) {
+                searchInput.value = '';
                 filterLanguages();
+                setTimeout(() => searchInput.focus(), 100);
             }
         }
 
+        function selectLanguage(code, name) {
+            selectedLanguageCode = code;
+            document.getElementById('selectedLanguage').textContent = name;
+
+            // Update selected state
+            document.querySelectorAll('#languageOptions .dropdown-option').forEach(opt => {
+                opt.classList.remove('selected');
+                if (opt.dataset.code === code) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            // Close dropdown
+            const header = document.querySelector('#languageDropdown .dropdown-header');
+            const content = document.getElementById('languageDropdownContent');
+            header.classList.remove('open');
+            content.classList.remove('show');
+
+            saveLanguage();
+        }
+
         function filterLanguages() {
-            const filter = document.getElementById('languageSearchFilter').value.toLowerCase();
-            const options = document.querySelectorAll('.language-option:not(.pinned)');
+            const search = document.getElementById('languageSearch').value.toLowerCase();
+            const options = document.querySelectorAll('#languageOptions .dropdown-option');
 
             options.forEach(option => {
-                const text = option.textContent.toLowerCase();
-                if (text.includes(filter)) {
+                const name = option.dataset.name.toLowerCase();
+                if (name.includes(search)) {
                     option.style.display = 'block';
                 } else {
                     option.style.display = 'none';
@@ -1305,47 +1421,182 @@
             });
         }
 
-        async function selectLanguage(code, name) {
-            selectedLanguage = code;
-            updateLanguageDisplay();
-            toggleLanguageDropdown();
-
+        async function saveLanguage() {
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_preferred_language', { language: code });
-                console.log('✅ Language saved:', code, name);
+                await invoke('set_language', { language: selectedLanguageCode });
+                console.log('✅ Language saved:', selectedLanguageCode);
             } catch (error) {
                 console.error('❌ Error saving language:', error);
             }
         }
 
-        function updateLanguageDisplay() {
-            const searchInput = document.getElementById('languageSearch');
-            const lang = allLanguages.find(l => l.code === selectedLanguage);
-            searchInput.value = lang ? lang.name : 'English';
+        // Model dropdown data
+        const MODELS = [
+            { value: 'tiny', name: 'Tiny (Fastest)' },
+            { value: 'base', name: 'Base' },
+            { value: 'small', name: 'Small (Recommended)' },
+            { value: 'medium', name: 'Medium' },
+            { value: 'large-v3', name: 'Large V3 (Best)' }
+        ];
 
-            // Update selected styling
-            document.querySelectorAll('.language-option').forEach(opt => {
-                if (opt.dataset.code === selectedLanguage) {
-                    opt.classList.add('selected');
-                } else {
-                    opt.classList.remove('selected');
+        let selectedModelValue = 'small';
+
+        function initializeModelDropdown() {
+            const optionsContainer = document.getElementById('modelOptions');
+            optionsContainer.innerHTML = '';
+
+            MODELS.forEach(model => {
+                const option = document.createElement('div');
+                option.className = 'dropdown-option';
+                option.textContent = model.name;
+                option.dataset.value = model.value;
+
+                if (model.value === selectedModelValue) {
+                    option.classList.add('selected');
                 }
+
+                option.onclick = () => selectModel(model.value, model.name);
+                optionsContainer.appendChild(option);
             });
         }
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            const container = document.querySelector('.language-dropdown-container');
-            const dropdown = document.getElementById('languageDropdown');
+        function toggleModelDropdown() {
+            const header = document.querySelector('#modelDropdown .dropdown-header');
+            const content = document.getElementById('modelDropdownContent');
 
-            if (container && !container.contains(e.target)) {
-                if (!dropdown.classList.contains('hidden')) {
-                    dropdown.classList.add('hidden');
-                    document.getElementById('languageSearchFilter').value = '';
-                    filterLanguages();
+            header.classList.toggle('open');
+            content.classList.toggle('show');
+        }
+
+        function selectModel(value, name) {
+            selectedModelValue = value;
+            document.getElementById('selectedModel').textContent = name;
+
+            document.querySelectorAll('#modelOptions .dropdown-option').forEach(opt => {
+                opt.classList.remove('selected');
+                if (opt.dataset.value === value) {
+                    opt.classList.add('selected');
                 }
-            }
+            });
+
+            const header = document.querySelector('#modelDropdown .dropdown-header');
+            const content = document.getElementById('modelDropdownContent');
+            header.classList.remove('open');
+            content.classList.remove('show');
+
+            saveSettings();
+        }
+
+        // Theme dropdown data
+        const THEMES = [
+            { value: 'system', name: 'System' },
+            { value: 'light', name: 'Light' },
+            { value: 'dark', name: 'Dark' }
+        ];
+
+        let selectedThemeValue = 'system';
+
+        function initializeThemeDropdown() {
+            const optionsContainer = document.getElementById('themeOptions');
+            optionsContainer.innerHTML = '';
+
+            THEMES.forEach(theme => {
+                const option = document.createElement('div');
+                option.className = 'dropdown-option';
+                option.textContent = theme.name;
+                option.dataset.value = theme.value;
+
+                if (theme.value === selectedThemeValue) {
+                    option.classList.add('selected');
+                }
+
+                option.onclick = () => selectTheme(theme.value, theme.name);
+                optionsContainer.appendChild(option);
+            });
+        }
+
+        function toggleThemeDropdown() {
+            const header = document.querySelector('#themeDropdown .dropdown-header');
+            const content = document.getElementById('themeDropdownContent');
+
+            header.classList.toggle('open');
+            content.classList.toggle('show');
+        }
+
+        function selectTheme(value, name) {
+            selectedThemeValue = value;
+            document.getElementById('selectedTheme').textContent = name;
+
+            document.querySelectorAll('#themeOptions .dropdown-option').forEach(opt => {
+                opt.classList.remove('selected');
+                if (opt.dataset.value === value) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            const header = document.querySelector('#themeDropdown .dropdown-header');
+            const content = document.getElementById('themeDropdownContent');
+            header.classList.remove('open');
+            content.classList.remove('show');
+
+            changeTheme();
+        }
+
+        // Microphone dropdown
+        let selectedMicrophoneValue = 'default';
+
+        function initializeMicrophoneDropdown() {
+            const optionsContainer = document.getElementById('microphoneOptions');
+            optionsContainer.innerHTML = '';
+
+            // Default microphone option
+            const option = document.createElement('div');
+            option.className = 'dropdown-option selected';
+            option.textContent = 'Default Microphone';
+            option.dataset.value = 'default';
+            option.onclick = () => selectMicrophone('default', 'Default Microphone');
+            optionsContainer.appendChild(option);
+        }
+
+        function toggleMicrophoneDropdown() {
+            const header = document.querySelector('#microphoneDropdown .dropdown-header');
+            const content = document.getElementById('microphoneDropdownContent');
+
+            header.classList.toggle('open');
+            content.classList.toggle('show');
+        }
+
+        function selectMicrophone(value, name) {
+            selectedMicrophoneValue = value;
+            document.getElementById('selectedMicrophone').textContent = name;
+
+            document.querySelectorAll('#microphoneOptions .dropdown-option').forEach(opt => {
+                opt.classList.remove('selected');
+                if (opt.dataset.value === value) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            const header = document.querySelector('#microphoneDropdown .dropdown-header');
+            const content = document.getElementById('microphoneDropdownContent');
+            header.classList.remove('open');
+            content.classList.remove('show');
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdowns = ['languageDropdown', 'modelDropdown', 'themeDropdown', 'microphoneDropdown'];
+
+            dropdowns.forEach(dropdownId => {
+                const dropdown = document.getElementById(dropdownId);
+                if (dropdown && !dropdown.contains(e.target)) {
+                    const header = dropdown.querySelector('.dropdown-header');
+                    const content = dropdown.querySelector('.dropdown-content');
+                    if (header) header.classList.remove('open');
+                    if (content) content.classList.remove('show');
+                }
+            });
         });
 
         async function checkForUpdates() {
@@ -1362,216 +1613,61 @@
             }
         }
 
->>>>>>> Stashed changes
         async function saveSettings() {
-            const modelSelector = document.getElementById('modelSelector');
-            const model = modelSelector ? modelSelector.value : 'small';
-            
+            const model = selectedModelValue;
+
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
-                await invoke('set_model_and_device', { 
+                await invoke('set_model_and_device', {
                     model: model,
-                    device: selectedDevice 
+                    device: selectedDevice
                 });
                 console.log(`Settings saved: model=${model}, device=${selectedDevice}`);
             } catch (error) {
                 console.error('Error saving settings:', error);
             }
         }
-        
-        // Start recording (simple - no live transcription)
-        async function startLiveRecording() {
-            const statusEl = document.getElementById('liveStatus');
-            const startBtn = document.getElementById('liveStartBtn');
-            const stopBtn = document.getElementById('liveStopBtn');
-            const transcriptionBox = document.getElementById('liveTranscription');
-            const liveTextEl = document.getElementById('liveText');
-            const liveMeta = document.getElementById('liveMeta');
-            const modelSelector = document.getElementById('modelSelector');
-            
-            const selectedModel = modelSelector.value;
-            
-            try {
-                statusEl.textContent = `⏳ Initializing ${selectedModel} model on ${selectedDevice.toUpperCase()}...`;
-                statusEl.className = 'status';
-                statusEl.style.display = 'block';
-                
-                // Start recording on backend
-                const response = await fetch(`${BACKEND_URL}/start`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        model_size: selectedModel,
-                        language: 'en',
-                        device: selectedDevice
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.status === 'started') {
-                    const deviceIcon = data.device === 'cuda' ? '⚡ GPU' : '💻 CPU';
-                    statusEl.textContent = `🎙️ RECORDING on ${deviceIcon} - Speak now! Click STOP when done.`;
-                    statusEl.className = 'status success';
-                    
-                    startBtn.style.display = 'none';
-                    stopBtn.style.display = 'inline-block';
-                    transcriptionBox.style.display = 'block';
-                    
-                    liveTextEl.textContent = "(Recording in progress... Click STOP to transcribe)";
-                    liveMeta.textContent = `Model: ${selectedModel} | Device: ${deviceIcon}`;
-                } else {
-                    statusEl.textContent = '❌ Failed to start: ' + (data.message || 'Unknown error');
-                    statusEl.className = 'status error';
-                }
-                
-            } catch (error) {
-                statusEl.textContent = '❌ Error: ' + error;
-                statusEl.className = 'status error';
-                console.error('Start recording failed:', error);
-            }
-        }
 
-        // Stop recording and get transcription
-        async function stopLiveRecording() {
-            const statusEl = document.getElementById('liveStatus');
-            const startBtn = document.getElementById('liveStartBtn');
-            const stopBtn = document.getElementById('liveStopBtn');
-            const liveTextEl = document.getElementById('liveText');
-            const liveMeta = document.getElementById('liveMeta');
-            
-            try {
-                // Show appropriate wait time based on device
-                const waitMsg = selectedDevice === 'cpu' 
-                    ? '⏳ Transcribing... (This may take 5-15 seconds on CPU)'
-                    : '⏳ Transcribing... (Should be done in 1-3 seconds on GPU)';
-                statusEl.textContent = waitMsg;
-                statusEl.className = 'status';
-                liveTextEl.textContent = "(Transcribing your recording...)";
-                
-                const response = await fetch(`${BACKEND_URL}/stop`, {
-                    method: 'POST'
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok && data.status === 'success') {
-                    const finalText = data.text || "";
-                    const deviceIcon = data.device === 'cuda' ? '⚡ GPU' : '💻 CPU';
-                    liveTextEl.textContent = finalText || "(No speech detected)";
-                    liveMeta.textContent = `Duration: ${data.duration?.toFixed(1)}s | Language: ${data.language} | Device: ${deviceIcon}`;
-                    
-                    statusEl.textContent = `✅ Transcription complete! ${finalText.split(' ').length} words on ${deviceIcon}.`;
-                    statusEl.className = 'status success';
-                    
-                    startBtn.style.display = 'inline-block';
-                    stopBtn.style.display = 'none';
-                    
-                    // Auto-inject text after transcription
-                    if (finalText) {
-                        const { invoke } = window.__TAURI_INTERNALS__;
-                        
-                        // Inject immediately
-                        try {
-                            await invoke('inject_text_directly', { text: finalText });
-                            statusEl.textContent = `✅ Text injected! ${finalText.split(' ').length} words on ${deviceIcon}.`;
-                            statusEl.className = 'status success';
-                        } catch (error) {
-                            console.error('Injection error:', error);
-                            statusEl.textContent = `✅ Transcribed but injection failed: ${error}`;
-                            statusEl.className = 'status error';
-                        }
-                    }
-                } else {
-                    statusEl.textContent = '❌ Transcription failed: ' + (data.message || 'Unknown error');
-                    statusEl.className = 'status error';
-                    
-                    startBtn.style.display = 'inline-block';
-                    stopBtn.style.display = 'none';
-                }
-                
-            } catch (error) {
-                statusEl.textContent = '❌ Error: ' + error;
-                statusEl.className = 'status error';
-                console.error('Stop recording failed:', error);
-                
-                startBtn.style.display = 'inline-block';
-                stopBtn.style.display = 'none';
-            }
-        }
-
-
-        // Global hotkey event handlers
-        let isHotkeyRecording = false;
-        
-        async function handleHotkeyStart() {
-            console.log('🔥 Hotkey START event received');
-            isHotkeyRecording = true;
-            
-            // Start recording silently (hotkey mode)
-            await startLiveRecording();
-        }
-        
-        async function handleHotkeyStop() {
-            console.log('🔥 Hotkey STOP event received');
-            isHotkeyRecording = false;
-            
-            // Stop recording and transcribe
-            await stopLiveRecording();
-        }
-
-        // Initialize on load
+        // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('🚀 Whisper4Windows UI Loaded');
-            
-            // Listen for global hotkey events from Tauri
-            if (window.__TAURI_INTERNALS__) {
-                const { listen } = window.__TAURI_INTERNALS__;
-                
-                listen('hotkey-start-recording', () => {
-                    console.log('📡 Received hotkey-start-recording event');
-                    handleHotkeyStart();
-                });
-                
-                listen('hotkey-stop-recording', () => {
-                    console.log('📡 Received hotkey-stop-recording event');
-                    handleHotkeyStop();
-                });
-                
-                console.log('✅ Hotkey listeners registered');
-                console.log('💡 Press Alt+T to start/stop recording from anywhere!');
+
+            // Initialize all dropdowns
+            initializeLanguageDropdown();
+            initializeModelDropdown();
+            initializeThemeDropdown();
+            initializeMicrophoneDropdown();
+
+            // Load theme
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            selectedThemeValue = savedTheme;
+            const themeObj = THEMES.find(t => t.value === savedTheme);
+            if (themeObj) {
+                document.getElementById('selectedTheme').textContent = themeObj.name;
             }
-            
+            initializeThemeDropdown(); // Refresh to show selected
+            changeTheme();
+
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (selectedThemeValue === 'system') {
+                    changeTheme();
+                }
+            });
+
             // Load clipboard paste setting
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
                 const enabled = await invoke('get_clipboard_paste');
                 clipboardPasteEnabled = enabled;
-                document.getElementById('clipboardPasteToggle').checked = enabled;
-                console.log(`📋 Loaded clipboard paste setting: ${enabled}`);
+                const toggle = document.getElementById('clipboardToggle');
+                if (enabled) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
             } catch (error) {
                 console.error('❌ Error loading clipboard paste setting:', error);
             }
-<<<<<<< Updated upstream
-            
-            // Check backend status on load
-            setTimeout(() => {
-                checkBackendHealth();
-            }, 500);
-            
-            // Save initial settings
-            setTimeout(() => {
-                saveSettings();
-            }, 1000);
-            
-            // Monitor model selector changes
-            const modelSelector = document.getElementById('modelSelector');
-            if (modelSelector) {
-                modelSelector.addEventListener('change', () => {
-                    saveSettings();
-                });
-            }
-=======
 
             // Load launch on login setting
             try {
@@ -1605,32 +1701,20 @@
 
             volumeSlider.value = volume;
 
-            // Load microphone device setting
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                const savedDeviceIndex = await invoke('get_microphone_device');
-                if (savedDeviceIndex !== null) {
-                    console.log(`✅ Loaded microphone device index: ${savedDeviceIndex}`);
-                }
-            } catch (error) {
-                console.error('❌ Error loading microphone device:', error);
-            }
-
-            // Initialize language dropdown
-            initLanguageDropdown();
-
             // Load saved language
             try {
                 const { invoke } = window.__TAURI_INTERNALS__;
-                const savedLanguage = await invoke('get_preferred_language');
-                if (savedLanguage) {
-                    selectedLanguage = savedLanguage;
-                    updateLanguageDisplay();
-                    console.log('✅ Loaded language:', savedLanguage);
+                const language = await invoke('get_language');
+                if (language) {
+                    selectedLanguageCode = language;
+                    const lang = LANGUAGES.find(l => l.code === language);
+                    if (lang) {
+                        document.getElementById('selectedLanguage').textContent = lang.name;
+                    }
+                    initializeLanguageDropdown(); // Refresh to show selected
                 }
             } catch (error) {
                 console.error('❌ Error loading language:', error);
-                // Keep default English if error
             }
 
             // Load saved shortcuts
@@ -1645,11 +1729,11 @@
 
             setTimeout(checkBackendHealth, 500);
             setTimeout(saveSettings, 1000);
-
-            // Load audio devices for the Sound page
-            setTimeout(loadAudioDevices, 800);
->>>>>>> Stashed changes
         });
+
+        // Export sound functions for overlay
+        window.playStartSound = playStartSound;
+        window.playStopSound = playStopSound;
     </script>
 </body>
 </html>

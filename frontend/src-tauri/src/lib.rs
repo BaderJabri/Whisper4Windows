@@ -25,6 +25,9 @@ pub struct AppState {
     pub selected_device: Arc<Mutex<String>>,
     pub selected_microphone: Arc<Mutex<Option<i32>>>,  // Microphone device index (None = default)
     pub use_clipboard: Arc<Mutex<bool>>,  // New: whether to paste to clipboard
+    pub selected_language: Arc<Mutex<String>>,  // Selected language code
+    pub toggle_shortcut: Arc<Mutex<String>>,  // Toggle recording shortcut
+    pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,  // Backend process handle
 }
 
 impl Default for AppState {
@@ -34,6 +37,9 @@ impl Default for AppState {
             selected_device: Arc::new(Mutex::new("auto".to_string())),
             selected_microphone: Arc::new(Mutex::new(None)),  // Default: None (use default device)
             use_clipboard: Arc::new(Mutex::new(true)),  // Default: enabled
+            selected_language: Arc::new(Mutex::new("en".to_string())),  // Default: English
+            toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),  // Default: F9
+            backend_child: Arc::new(Mutex::new(None)),  // Will be set in setup
         }
     }
 }
@@ -202,6 +208,7 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     let model = state.selected_model.lock().await.clone();
     let device = state.selected_device.lock().await.clone();
     let microphone = state.selected_microphone.lock().await.clone();
+    let language = state.selected_language.lock().await.clone();
 
     // Position window at top center and show
     if let Some(win) = app.get_webview_window("recording") {
@@ -224,9 +231,16 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     // Call backend /start
     let client = reqwest::Client::new();
     tokio::spawn(async move {
+        // Use None for auto-detect, otherwise use the selected language
+        let lang_value = if language == "auto" {
+            serde_json::Value::Null
+        } else {
+            serde_json::json!(language)
+        };
+
         let mut request_body = serde_json::json!({
             "model_size": model,
-            "language": "en",
+            "language": lang_value,
             "device": device
         });
 
@@ -389,6 +403,60 @@ async fn get_clipboard_paste(state: State<'_, AppState>) -> Result<bool, String>
     Ok(enabled)
 }
 
+// Language commands
+#[tauri::command]
+async fn set_language(language: String, state: State<'_, AppState>) -> Result<(), String> {
+    *state.selected_language.lock().await = language.clone();
+    log::info!("🌐 Language set to: {}", language);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_language(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.selected_language.lock().await.clone())
+}
+
+// Shortcut commands
+#[tauri::command]
+async fn save_shortcuts(shortcuts: std::collections::HashMap<String, String>, state: State<'_, AppState>) -> Result<(), String> {
+    if let Some(toggle) = shortcuts.get("toggle") {
+        *state.toggle_shortcut.lock().await = toggle.clone();
+        log::info!("⌨️ Toggle shortcut saved: {}", toggle);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_toggle_shortcut(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.toggle_shortcut.lock().await.clone())
+}
+
+// Stub commands for settings that don't need backend implementation yet
+#[tauri::command]
+async fn get_preferred_languages() -> Result<Vec<String>, String> {
+    Ok(vec![])  // Not used anymore, but kept for compatibility
+}
+
+#[tauri::command]
+async fn set_preferred_languages(_languages: Vec<String>) -> Result<(), String> {
+    Ok(())  // Not used anymore, but kept for compatibility
+}
+
+#[tauri::command]
+async fn get_launch_on_login() -> Result<bool, String> {
+    Ok(false)  // TODO: Implement later
+}
+
+#[tauri::command]
+async fn set_launch_on_login(_enabled: bool) -> Result<(), String> {
+    Ok(())  // TODO: Implement later
+}
+
+#[tauri::command]
+async fn check_for_updates() -> Result<String, String> {
+    Ok("No updates available".to_string())  // TODO: Implement GitHub release check
+}
+
 // Tray menu
 fn create_tray_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
     let toggle = MenuItem::with_id(app, "toggle", "🎙️ Start/Stop Recording (F9)", true, None::<&str>)?;
@@ -420,7 +488,18 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 let _ = win.show().and_then(|_| win.set_focus());
             }
         }
-        "quit" => app.exit(0),
+        "quit" => {
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let state: tauri::State<AppState> = app_clone.state();
+                if let Some(mut child) = state.backend_child.lock().await.take() {
+                    log::info!("🛑 Killing backend process...");
+                    let _ = child.kill();
+                    log::info!("✅ Backend process terminated");
+                }
+                app_clone.exit(0);
+            });
+        }
         _ => {}
     }
 }
@@ -428,6 +507,14 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            log::info!("🔒 Single instance check - app already running, focusing existing window");
+            // Bring main window to front if already running
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             use tauri_plugin_global_shortcut::{Code, Shortcut, GlobalShortcutExt};
             use tauri::WebviewWindowBuilder;
@@ -442,6 +529,30 @@ pub fn run() {
             )?;
 
             log::info!("🚀 Whisper4Windows starting...");
+
+            // Start backend sidecar
+            log::info!("🔧 Starting backend server...");
+            use tauri::Manager;
+            use tauri_plugin_shell::ShellExt;
+
+            let sidecar_command = app.app_handle()
+                .shell()
+                .sidecar("whisper-backend")
+                .expect("Failed to create sidecar command");
+
+            let (_rx, child) = sidecar_command
+                .spawn()
+                .expect("Failed to spawn backend sidecar");
+
+            // Store the child process in state so we can kill it on app exit
+            let state: tauri::State<AppState> = app.state();
+            tauri::async_runtime::block_on(async {
+                *state.backend_child.lock().await = Some(child);
+            });
+
+            // Wait a moment for backend to start
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            log::info!("✅ Backend server started");
 
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))
@@ -511,7 +622,16 @@ pub fn run() {
             set_microphone_device,
             get_microphone_device,
             set_clipboard_paste,
-            get_clipboard_paste
+            get_clipboard_paste,
+            set_language,
+            get_language,
+            save_shortcuts,
+            get_toggle_shortcut,
+            get_preferred_languages,
+            set_preferred_languages,
+            get_launch_on_login,
+            set_launch_on_login,
+            check_for_updates
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

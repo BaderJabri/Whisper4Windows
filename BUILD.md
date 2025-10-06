@@ -12,9 +12,12 @@ This guide explains how to build a standalone MSI installer for Whisper4Windows 
    - Install from https://visualstudio.microsoft.com/downloads/
    - Select "Desktop development with C++"
 
-### Optional (for GPU support)
-4. **CUDA Toolkit 12.6+** - https://developer.nvidia.com/cuda-downloads
-5. **cuDNN 9.x** - https://developer.nvidia.com/cudnn
+### Optional (for GPU support during development)
+
+4. **CUDA Toolkit 12.6+** - https://developer.nvidia.com/cuda-downloads (only needed for development)
+5. **cuDNN 9.x** - https://developer.nvidia.com/cudnn (only needed for development)
+
+**Note:** CUDA libraries are now bundled with the installer, so end users don't need to install CUDA separately!
 
 ## Build Process
 
@@ -27,10 +30,11 @@ BUILD_INSTALLER.bat
 ```
 
 This will:
-1. Build the Python backend as a standalone .exe using PyInstaller
+
+1. Build the Python backend as a standalone .exe using PyInstaller (includes bundled CUDA DLLs)
 2. Copy it to the Tauri binaries folder
 3. Build the Tauri frontend with the bundled backend
-4. Create an MSI installer
+4. Create an MSI installer (~660MB with CUDA libraries)
 
 **Output:** `frontend\src-tauri\target\release\bundle\msi\Whisper4Windows_0.1.0_x64_en-US.msi`
 
@@ -77,6 +81,7 @@ The app uses Tauri's "sidecar" feature to bundle the Python backend:
 ### Configuration
 
 **tauri.conf.json:**
+
 ```json
 {
   "bundle": {
@@ -88,6 +93,7 @@ The app uses Tauri's "sidecar" feature to bundle the Python backend:
 ```
 
 **lib.rs:**
+
 ```rust
 // Start backend sidecar
 let sidecar_command = app.shell().sidecar("whisper-backend")
@@ -104,6 +110,7 @@ let (_rx, child) = sidecar_command
 
 **Single-file distribution:**
 The MSI installer includes:
+
 - ✅ Frontend app.exe
 - ✅ Backend whisper-backend.exe (bundled)
 - ✅ All dependencies
@@ -111,24 +118,29 @@ The MSI installer includes:
 - ✅ System tray integration
 
 **What users DON'T need to install:**
+
 - ❌ Python
 - ❌ Rust
 - ❌ Node.js
 - ❌ Any dependencies
 
 **Installation:**
+
 1. Download the MSI file
 2. Run the installer
 3. Launch from Start Menu or Desktop shortcut
 4. Everything works automatically!
 
-### For GPU Users
+### GPU Support
 
-GPU support (CUDA/cuDNN) must still be installed separately by the user:
-- CUDA Toolkit 12.6+
-- cuDNN 9.x
+✅ **CUDA libraries are now bundled with the installer!**
 
-The app will automatically detect and use GPU if available, otherwise falls back to CPU.
+The MSI includes all necessary CUDA DLLs (cublas, cudnn, etc.) from the NVIDIA pip packages. Users with NVIDIA GPUs can use GPU acceleration immediately after installation - no separate CUDA installation required!
+
+The app will automatically:
+- Detect NVIDIA GPU
+- Use bundled CUDA libraries for GPU acceleration
+- Fall back to CPU if no GPU is detected or if GPU loading fails
 
 ## Troubleshooting
 
@@ -143,6 +155,7 @@ pip install pyinstaller
 ### Build Fails: "Sidecar not found"
 
 Make sure the backend executable is copied with the correct name:
+
 ```
 frontend\src-tauri\binaries\whisper-backend-x86_64-pc-windows-msvc.exe
 ```
@@ -150,28 +163,36 @@ frontend\src-tauri\binaries\whisper-backend-x86_64-pc-windows-msvc.exe
 ### Backend doesn't start in built app
 
 Check the app logs:
+
 - Windows: `%APPDATA%\com.whisper4windows.dev\logs\`
 - Look for "Backend server started" message
 
 ### Large File Size
 
-The MSI will be large (~500MB-1GB) because it includes:
-- Python runtime
-- PyTorch/CUDA libraries
-- Whisper model dependencies
+The MSI is approximately ~660MB because it includes:
 
-To reduce size, consider:
-- Using `--exclude-module` in `build_backend.py` for unused packages
-- Model downloads happen on first run (not included in installer)
+- Python runtime (~50MB)
+- FastAPI/Uvicorn backend (~100MB)
+- faster-whisper and dependencies (~100MB)
+- CUDA libraries (cublas, cudnn, etc.) (~400MB)
+- Tauri frontend (~10MB)
+
+**Note:** Whisper models are NOT included in the installer - they download automatically on first use to `%APPDATA%\Whisper4Windows\models\`
+
+To reduce size:
+- Remove CUDA bundling (edit `build_backend.py` to exclude NVIDIA DLLs) - saves ~400MB but requires users to install CUDA
+- Use `--exclude-module` in `build_backend.py` for unused packages
 
 ## Development vs Production
 
 **Development:**
+
 - Run `START_APP.bat` - uses Python virtual environment
 - Hot reload with `cargo tauri dev`
 - Faster iteration
 
 **Production:**
+
 - Build MSI installer
 - Single-file distribution
 - No Python required for users
@@ -188,26 +209,30 @@ To reduce size, consider:
 ### Release Checklist
 
 - [ ] Update version in `frontend\src-tauri\tauri.conf.json`
-- [ ] Build MSI installer
-- [ ] Test on clean Windows machine
+- [ ] Build MSI installer: `BUILD_INSTALLER.bat`
+- [ ] Test on clean Windows machine (with and without NVIDIA GPU)
+- [ ] Verify GPU acceleration works without CUDA installation
 - [ ] Create GitHub release with:
-  - [ ] MSI installer
+  - [ ] MSI installer (~660MB)
   - [ ] Installation instructions
-  - [ ] GPU setup guide (link to CUDA/cuDNN)
+  - [ ] Note about bundled CUDA support
   - [ ] Changelog
 
 ## Files Overview
 
 ### Build Scripts
+
 - `BUILD_BACKEND.bat` - Builds backend executable only
 - `BUILD_INSTALLER.bat` - Builds complete MSI installer
 - `backend/build_backend.py` - PyInstaller configuration
 
 ### Configuration
+
 - `frontend/src-tauri/tauri.conf.json` - Tauri bundle config
 - `frontend/src-tauri/src/lib.rs` - Sidecar startup code
 
 ### Output
+
 - `backend/dist/whisper-backend.exe` - Standalone backend
 - `frontend/src-tauri/binaries/whisper-backend-*.exe` - Renamed for Tauri
 - `frontend/src-tauri/target/release/bundle/msi/*.msi` - Final installer

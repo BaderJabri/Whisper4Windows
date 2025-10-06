@@ -715,9 +715,18 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 let state: tauri::State<AppState> = app_clone.state();
                 if let Some(child) = state.backend_child.lock().await.take() {
                     log::info!("🛑 Killing backend process...");
-                    let _ = child.kill();
-                    log::info!("✅ Backend process terminated");
+                    match child.kill() {
+                        Ok(_) => {
+                            log::info!("✅ Backend process kill signal sent");
+                            // Give it a moment to terminate
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        }
+                        Err(e) => {
+                            log::warn!("⚠️ Failed to kill backend: {}", e);
+                        }
+                    }
                 }
+                log::info!("👋 Exiting application");
                 app_clone.exit(0);
             });
         }

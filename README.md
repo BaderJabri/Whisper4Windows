@@ -70,9 +70,19 @@ Customize Whisper4Windows to work exactly how you want:
 
 ## 🚀 Getting Started
 
-### **Quick Setup**
+### **Option 1: MSI Installer (Recommended)**
 
-1. **Download** - Clone this repo or download the release
+1. **Download** - Get `Whisper4Windows_0.1.0_x64_en-US.msi` (~660MB)
+2. **Install** - Run the installer
+3. **Launch** - Start from Start Menu or Desktop
+4. **First Run** - Whisper model downloads automatically (~500MB, one-time)
+5. **Start Dictating!** - Press F9 anywhere and speak
+
+✅ **CUDA libraries bundled!** GPU acceleration works out-of-the-box if you have an NVIDIA GPU.
+
+### **Option 2: From Source (Developers)**
+
+1. **Clone** - Clone this repo
 2. **Run** - Double-click `START_APP.bat`
 3. **Wait** - First launch downloads the Whisper model (~500MB, one-time only)
 4. **Start Dictating!** - Press F9 anywhere and speak
@@ -113,14 +123,14 @@ Watch it appear instantly! ✨
 
 - NVIDIA GPU (GTX 1060 or better)
 - 16GB RAM
-- CUDA 12.6+ & cuDNN 9.x installed
+- ✅ **No CUDA installation required!** CUDA libraries are bundled with the MSI installer
 
 **Performance:**
 
-- **GPU Mode:** 5 seconds of speech → 0.5-2 seconds transcription
+- **GPU Mode:** 5 seconds of speech → 0.5-2 seconds transcription ⚡
 - **CPU Mode:** 5 seconds of speech → 5-15 seconds transcription
 
-📖 **Need help with GPU setup? [See installation guide →](INSTALLATION.md)**
+📖 **[Installation guide →](INSTALLATION.md)** | **[Build your own MSI →](BUILD.md)**
 
 ## ❓ FAQ
 
@@ -129,6 +139,9 @@ A: Yes! 100% free and open-source. No subscriptions, no API keys, no hidden cost
 
 **Q: Do I need an internet connection?**
 A: Only for the first-time model download (~500MB). After that, everything works completely offline.
+
+**Q: Do I need to install CUDA for GPU acceleration?**
+A: No! The MSI installer includes all necessary CUDA libraries. Just install and it works if you have an NVIDIA GPU.
 
 **Q: Which languages are supported?**
 A: All 99 languages that Whisper supports - from Afrikaans to Zulu, including English, Spanish, French, German, Chinese, Japanese, Arabic, and many more.
@@ -155,10 +168,11 @@ pip install -r requirements.txt
 python main.py
 ```
 
-**GPU not detected?**
+**GPU not working?**
 
-- Run `TEST_GPU.bat` to diagnose
-- See [INSTALLATION.md](INSTALLATION.md) for GPU setup
+- MSI installer: GPU should work automatically - check Device Manager for NVIDIA GPU
+- From source: Run `TEST_GPU.bat` to diagnose, see [INSTALLATION.md](INSTALLATION.md)
+- App automatically falls back to CPU if GPU fails
 
 **Hotkey not working?**
 

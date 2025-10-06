@@ -30,17 +30,19 @@ Whisper4Windows is a local, GPU-accelerated speech-to-text application for Windo
 Inspired by SuperWhisper (Mac app), this is a Windows implementation with similar UX but different technical architecture.
 
 ### Core Features
-- **Global Hotkeys**: F9 (start/stop), Esc (cancel) - OS-level, work anywhere
+- **Global Hotkeys**: Customizable shortcuts (default F9/Escape) - OS-level, work anywhere
+- **Dynamic Shortcut Registration**: Change shortcuts in settings without restart
 - **Minimal Overlay**: 616×140px window at top center of screen
 - **Live Audio Visualization**: 80 animated bars showing real-time audio levels from backend
 - **GPU Acceleration**: NVIDIA CUDA support via faster-whisper
 - **Clipboard-based Injection**: Text inserted via Ctrl+V simulation (not character-by-character)
 - **State Management**: Auto-resets when window becomes visible
-- **Multi-Language Support**: 13+ languages with auto-detection and preferred language selection
+- **Multi-Language Support**: 99 languages with searchable dropdown and auto-detection
 - **Microphone Selection**: Choose input device from system audio devices
-- **Sound Effects**: Configurable beep sounds on recording start/stop using Web Audio API
+- **Sound Effects**: Configurable beep sounds triggered from Rust on shortcut use
 - **Clipboard Settings**: Toggle to save/skip clipboard saving when injecting text
 - **Theme Support**: Light, Dark, and System theme options with CSS variables
+- **Custom Dropdowns**: Searchable language selector with consistent styling across all dropdowns
 
 ---
 
@@ -183,8 +185,11 @@ pub struct AppState {
     pub selected_model: Arc<Mutex<String>>,           // "tiny", "base", "small", "medium", "large-v3"
     pub selected_device: Arc<Mutex<String>>,          // "auto", "cpu", "cuda"
     pub selected_microphone: Arc<Mutex<Option<i32>>>, // Device index for microphone selection
-    pub preferred_languages: Arc<Mutex<Vec<String>>>, // List of preferred languages for transcription
     pub use_clipboard: Arc<Mutex<bool>>,              // Whether to save text to clipboard
+    pub selected_language: Arc<Mutex<String>>,        // Selected language code (e.g., "en", "auto")
+    pub toggle_shortcut: Arc<Mutex<String>>,          // Toggle recording shortcut (e.g., "F9")
+    pub cancel_shortcut: Arc<Mutex<String>>,          // Cancel recording shortcut (e.g., "Escape")
+    pub backend_child: Arc<Mutex<Option<CommandChild>>>, // Backend process handle for cleanup
 }
 ```
 
@@ -1197,7 +1202,118 @@ fn set_clipboard_setting(use_clipboard: bool, state: State<AppState>) -> Result<
 - When true: transcribed text remains in clipboard
 - When false: old clipboard content is restored after paste
 
-### 11. Theme Support
+### 11. Dynamic Shortcut Re-registration
+
+**Problem:** Users want to customize keyboard shortcuts, and changes should work immediately without restart.
+
+**Solution:** Parse shortcut strings, dynamically unregister old shortcuts, and register new ones.
+
+**Implementation:**
+
+**Shortcut Parser:**
+```rust
+fn parse_shortcut(shortcut_str: &str) -> Option<Shortcut> {
+    let parts: Vec<&str> = shortcut_str.split('+').collect();
+    let mut modifiers = Modifiers::empty();
+    let mut key_code: Option<Code> = None;
+
+    for part in parts {
+        match part.trim() {
+            "Ctrl" | "Control" => modifiers |= Modifiers::CONTROL,
+            "Alt" => modifiers |= Modifiers::ALT,
+            "Shift" => modifiers |= Modifiers::SHIFT,
+            "Super" | "Win" | "Meta" => modifiers |= Modifiers::SUPER,
+            "F9" => key_code = Some(Code::F9),
+            "\\" | "Backslash" => key_code = Some(Code::Backslash),
+            // ... more keys ...
+            _ => {}
+        }
+    }
+
+    if let Some(code) = key_code {
+        Some(Shortcut::new(Some(modifiers), code))
+    } else {
+        None
+    }
+}
+```
+
+**State Management:**
+```rust
+pub struct AppState {
+    pub toggle_shortcut: Arc<Mutex<String>>,   // "F9", "Ctrl+R", etc.
+    pub cancel_shortcut: Arc<Mutex<String>>,   // "Escape", "Ctrl+Q", etc.
+}
+```
+
+**Dynamic Re-registration:**
+```rust
+#[tauri::command]
+async fn save_shortcuts(
+    shortcuts: std::collections::HashMap<String, String>,
+    app: AppHandle,
+    state: State<'_, AppState>
+) -> Result<(), String> {
+    if let Some(toggle) = shortcuts.get("toggle") {
+        let old_shortcut = state.toggle_shortcut.lock().await.clone();
+        *state.toggle_shortcut.lock().await = toggle.clone();
+
+        // Unregister old shortcut
+        if let Some(old_sc) = parse_shortcut(&old_shortcut) {
+            let _ = app.global_shortcut().unregister(old_sc);
+        }
+
+        // Register new shortcut
+        if let Some(new_sc) = parse_shortcut(toggle) {
+            app.global_shortcut().register(new_sc)?;
+        }
+    }
+    // Same for cancel shortcut...
+    Ok(())
+}
+```
+
+**Shortcut Handler:**
+```rust
+.with_handler(move |_app, shortcut, event| {
+    if event.state == ShortcutState::Pressed {
+        let shortcut_str = format!("{:?}", shortcut);
+
+        // Dynamically check which shortcut was pressed
+        let state: tauri::State<AppState> = app_clone.state();
+        let toggle_sc = state.toggle_shortcut.lock().await.clone();
+        let cancel_sc = state.cancel_shortcut.lock().await.clone();
+
+        if let Some(parsed_toggle) = parse_shortcut(&toggle_sc) {
+            if format!("{:?}", parsed_toggle) == shortcut_str {
+                // Handle toggle
+            }
+        }
+        if let Some(parsed_cancel) = parse_shortcut(&cancel_sc) {
+            if format!("{:?}", parsed_cancel) == shortcut_str {
+                // Handle cancel
+            }
+        }
+    }
+})
+```
+
+**Supported Keys:**
+- Function keys: F1-F12
+- Special keys: Escape, Space, Tab, Enter, Backspace, Delete, Home, End, PageUp, PageDown
+- Arrow keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight
+- Letters: A-Z
+- Numbers: 0-9
+- Symbols: `\`, `/`, `;`, `'`, `[`, `]`, `,`, `.`, `` ` ``, `-`, `=`
+- Modifiers: Ctrl, Alt, Shift, Win/Super
+
+**Example Shortcuts:**
+- `F9` - Just F9 key
+- `Ctrl+Shift+R` - Control + Shift + R
+- `Alt+\` - Alt + Backslash
+- `Ctrl+Q` - Control + Q
+
+### 12. Theme Support
 
 **Problem:** Users want to customize appearance and reduce eye strain.
 

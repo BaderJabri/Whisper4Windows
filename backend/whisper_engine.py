@@ -12,6 +12,91 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Add CUDA library paths for bundled executables
+def setup_cuda_paths():
+    """Add CUDA library paths to PATH for all environments"""
+    logger.info("🔍 Setting up CUDA paths...")
+    logger.info(f"   sys.frozen = {getattr(sys, 'frozen', False)}")
+
+    cuda_paths = []
+
+    # Check if running as bundled executable
+    if getattr(sys, 'frozen', False):
+        logger.info(f"   Running as bundled app, MEIPASS = {sys._MEIPASS}")
+
+        # Add the executable's own directory first (where user might copy DLLs)
+        exe_dir = Path(sys.executable).parent
+        logger.info(f"   Executable directory: {exe_dir}")
+        cuda_paths.append(exe_dir)
+
+        # Also add MEIPASS temporary extraction directory
+        cuda_paths.append(Path(sys._MEIPASS))
+
+        # NVIDIA pip packages (bundled with PyInstaller)
+        cuda_paths.extend([
+            Path(sys._MEIPASS) / "nvidia" / "cublas" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cudnn" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cufft" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "curand" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cusolver" / "bin",
+            Path(sys._MEIPASS) / "nvidia" / "cusparse" / "bin",
+        ])
+
+    # System CUDA installation (check all versions)
+    cuda_paths.extend([
+        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin"),
+        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.7\bin"),
+        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin"),
+        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.3\bin"),
+        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.4\bin"),
+        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.5\bin"),
+    ])
+
+    # Also check if CUDA is in the CUDA toolkit's nested bin
+    cuda_toolkit = Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA")
+    if cuda_toolkit.exists():
+        for cuda_version_dir in cuda_toolkit.iterdir():
+            if cuda_version_dir.is_dir():
+                bin_path = cuda_version_dir / "bin"
+                if bin_path.exists():
+                    cuda_paths.append(bin_path)
+
+    # Add to PATH environment variable
+    current_path = os.environ.get('PATH', '')
+    paths_added = 0
+
+    for cuda_path in cuda_paths:
+        if cuda_path.exists():
+            logger.info(f"✅ Found CUDA path: {cuda_path}")
+
+            # Add to PATH
+            if str(cuda_path) not in current_path:
+                current_path = str(cuda_path) + os.pathsep + current_path
+                paths_added += 1
+
+            # Also add to Windows DLL search path (Python 3.8+)
+            try:
+                os.add_dll_directory(str(cuda_path))
+                logger.info(f"   ✅ Added to DLL directory: {cuda_path}")
+            except (AttributeError, OSError) as e:
+                logger.warning(f"   ⚠️ Could not add DLL directory: {e}")
+        else:
+            logger.debug(f"⚠️ CUDA path not found: {cuda_path}")
+
+    os.environ['PATH'] = current_path
+    logger.info(f"✅ CUDA paths configured ({paths_added} paths added to PATH)")
+
+    # Debug: Try to find cublas64_12.dll manually
+    import ctypes.util
+    cublas_dll = ctypes.util.find_library("cublas64_12")
+    if cublas_dll:
+        logger.info(f"✅ cublas64_12.dll found at: {cublas_dll}")
+    else:
+        logger.warning("⚠️ cublas64_12.dll NOT found by ctypes.util.find_library()")
+
+# Setup CUDA paths before importing torch/ctranslate2
+setup_cuda_paths()
+
 # Get the appropriate models directory
 def get_models_dir() -> Path:
     """Get the models directory, using AppData for bundled apps"""
@@ -59,11 +144,13 @@ class WhisperEngine:
         self.compute_type = compute_type
         self.model = None
         self.is_loaded = False
-        
+        self._cuda_detected = False
+        self._original_device = device  # Store original device setting
+
         # Auto-detect device and compute type
         if device == "auto":
             self.device = self._detect_device()
-        
+
         if compute_type == "auto":
             self.compute_type = self._detect_compute_type()
     
@@ -75,21 +162,29 @@ class WhisperEngine:
             cuda_count = ctranslate2.get_cuda_device_count()
             if cuda_count > 0:
                 logger.info(f"🚀 CUDA is available! Found {cuda_count} GPU(s)")
+                # Store that we detected CUDA for potential fallback
+                self._cuda_detected = True
                 return "cuda"
         except Exception as e:
-            logger.warning(f"CUDA check failed: {e}")
-        
+            logger.warning(f"⚠️ CUDA check failed: {e}")
+            logger.info("💻 Falling back to CPU")
+
+        self._cuda_detected = False
         logger.info("💻 Using CPU")
         return "cpu"
     
     def _detect_compute_type(self) -> str:
         """Auto-detect best compute type based on device"""
         if self.device == "cuda":
-            # Use float16 for best quality with cuDNN installed
-            # Falls back to int8_float16 if cuDNN has issues
+            # Return first option - we'll try fallbacks during load_model
+            # Order: float16 (best quality) -> int8_float16 (good compatibility) -> int8 (fallback)
             return "float16"
         else:
             return "int8"  # Best for CPU
+
+    def _get_cuda_compute_type_fallbacks(self) -> List[str]:
+        """Get ordered list of compute types to try for CUDA, from best to worst"""
+        return ["float16", "int8_float16", "int8"]
     
     def is_model_downloaded(self, model_size: str = None) -> bool:
         """
@@ -119,28 +214,63 @@ class WhisperEngine:
     
     def load_model(self) -> bool:
         """
-        Load the Whisper model with automatic GPU -> CPU fallback
-        
+        Load the Whisper model with automatic GPU compute type fallback, then CPU fallback
+
         Returns:
             True if successful, False otherwise
         """
         if not WHISPER_AVAILABLE:
             logger.error("❌ faster-whisper is not installed!")
             return False
-        
+
         if self.is_loaded:
             logger.info("Model already loaded")
             return True
-        
+
         try:
             logger.info(f"📥 Loading Whisper model: {self.model_size}")
             logger.info(f"   Device: {self.device}")
             logger.info(f"   Compute type: {self.compute_type}")
-            
+
             # Create models directory if it doesn't exist
             models_dir = get_models_dir()
-            
-            # Try to load model
+
+            # If using CUDA, try compute types in order of efficiency
+            if self.device == "cuda":
+                compute_types_to_try = self._get_cuda_compute_type_fallbacks()
+
+                # If user specified a specific compute type, try that first
+                if self.compute_type != "auto" and self.compute_type not in compute_types_to_try:
+                    compute_types_to_try.insert(0, self.compute_type)
+
+                for compute_type in compute_types_to_try:
+                    try:
+                        logger.info(f"🔄 Trying CUDA with compute type: {compute_type}")
+                        self.model = WhisperModel(
+                            self.model_size,
+                            device=self.device,
+                            compute_type=compute_type,
+                            download_root=str(models_dir)
+                        )
+
+                        # Success! Cache this compute type
+                        self.compute_type = compute_type
+                        self.is_loaded = True
+                        logger.info(f"✅ Model loaded successfully on CUDA with {compute_type}: {self.model_size}")
+                        return True
+
+                    except Exception as compute_error:
+                        logger.warning(f"⚠️ CUDA with {compute_type} failed: {compute_error}")
+                        # Continue to next compute type
+                        continue
+
+                # All CUDA compute types failed, fall back to CPU
+                logger.warning("⚠️ All CUDA compute types failed")
+                logger.info("🔄 Falling back to CPU...")
+                self.device = "cpu"
+                self.compute_type = "int8"
+
+            # Try loading with current device/compute_type (either CPU from start, or CPU fallback)
             try:
                 self.model = WhisperModel(
                     self.model_size,
@@ -148,34 +278,18 @@ class WhisperEngine:
                     compute_type=self.compute_type,
                     download_root=str(models_dir)
                 )
-                
+
                 self.is_loaded = True
-                logger.info(f"✅ Model loaded successfully: {self.model_size}")
-                return True
-                
-            except Exception as gpu_error:
-                # If GPU failed and we were trying GPU, fall back to CPU
-                if self.device == "cuda":
-                    logger.warning(f"⚠️ GPU loading failed: {gpu_error}")
-                    logger.info("🔄 Falling back to CPU...")
-                    
-                    self.device = "cpu"
-                    self.compute_type = "int8"
-                    
-                    self.model = WhisperModel(
-                        self.model_size,
-                        device=self.device,
-                        compute_type=self.compute_type,
-                        download_root=str(models_dir)
-                    )
-                    
-                    self.is_loaded = True
+                if self._cuda_detected and self.device == "cpu":
                     logger.info(f"✅ Model loaded successfully on CPU (GPU fallback): {self.model_size}")
-                    return True
                 else:
-                    # CPU also failed, re-raise
-                    raise
-            
+                    logger.info(f"✅ Model loaded successfully on {self.device.upper()}: {self.model_size}")
+                return True
+
+            except Exception as final_error:
+                logger.error(f"❌ Final loading attempt failed: {final_error}")
+                raise
+
         except Exception as e:
             logger.error(f"❌ Failed to load model: {e}")
             import traceback

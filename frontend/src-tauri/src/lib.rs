@@ -180,12 +180,19 @@ pub fn inject_text(text: &str, save_to_clipboard: bool) -> Result<()> {
         // Restore old clipboard if needed
         if !save_to_clipboard {
             if let Some(old_text) = old_clipboard {
+                // Wait a bit for paste to complete
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 let _ = set_clipboard_text(&old_text);
-                log::info!("📋 Restored previous clipboard content");
+                log::info!("📋 Clipboard restored to previous content");
+            } else {
+                // If there was no previous clipboard content, clear it
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let empty: Vec<u16> = vec![0];
+                let _ = set_clipboard_text(&empty);
+                log::info!("📋 Clipboard cleared");
             }
         } else {
-            log::info!("📋 Text saved to clipboard");
+            log::info!("📋 Text saved to clipboard and pasted");
         }
     }
 
@@ -687,10 +694,23 @@ fn create_tray_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
 }
 
 fn handle_tray_event(app: &AppHandle, event: TrayIconEvent) {
-    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-        if let Some(win) = app.get_webview_window("main") {
-            let _ = if win.is_visible().unwrap_or(false) { win.hide() } else { win.show().and_then(|_| win.set_focus()) };
+    // Handle both Up and Down states to be more reliable
+    // Use Down for immediate feedback
+    match event {
+        TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Down,
+            ..
+        } => {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = if win.is_visible().unwrap_or(false) {
+                    win.hide()
+                } else {
+                    win.show().and_then(|_| win.set_focus())
+                };
+            }
         }
+        _ => {}
     }
 }
 
@@ -811,6 +831,21 @@ pub fn run() {
             tray.on_tray_icon_event(move |_tray, event| handle_tray_event(&app_handle, event));
 
             log::info!("✅ Tray icon created");
+
+            // Intercept main window close event to hide instead of destroy
+            if let Some(main_window) = app.get_webview_window("main") {
+                let app_handle_close = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        // Prevent window from closing
+                        api.prevent_close();
+                        // Hide it instead
+                        if let Some(win) = app_handle_close.get_webview_window("main") {
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
 
             // Global shortcuts handler
             let app_handle_hotkey = app.handle().clone();

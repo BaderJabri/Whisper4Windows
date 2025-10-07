@@ -831,6 +831,16 @@
 
                 <div class="config-row">
                     <div class="config-row-left">
+                        <div class="config-row-title">GPU Acceleration Libraries</div>
+                        <div class="config-row-description">Download CUDA libraries for GPU support</div>
+                    </div>
+                    <div class="config-row-right">
+                        <button class="btn" onclick="manualGPUSetup()">Install GPU Libraries...</button>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
                         <div class="config-row-title">Save to Clipboard</div>
                         <div class="config-row-description">Keep transcribed text in clipboard</div>
                     </div>
@@ -988,6 +998,31 @@
             <div class="shortcut-badge recording" id="modalShortcut">Listening...</div>
             <div class="modal-buttons" style="margin-top: 20px;">
                 <button class="btn" onclick="cancelShortcutCapture()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GPU Setup Modal -->
+    <div id="gpuSetupModal" class="modal-overlay hidden">
+        <div class="modal" style="max-width: 500px;">
+            <h3>🚀 GPU Detected!</h3>
+            <p>Your system has an NVIDIA GPU. Download GPU acceleration libraries (~600MB) for 5-10x faster transcription?</p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                <strong>With GPU:</strong> 5s audio → 0.5-2s transcription<br>
+                <strong>Without GPU:</strong> 5s audio → 5-15s transcription
+            </p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 10px;">
+                You can always install this later from Configuration → Processing Device.
+            </p>
+            <div id="gpuDownloadProgress" class="hidden" style="margin: 20px 0;">
+                <div style="background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div id="gpuProgressBar" style="background: #667eea; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <p id="gpuProgressText" style="font-size: 13px; margin-top: 8px; color: var(--text-secondary);">Preparing...</p>
+            </div>
+            <div class="modal-buttons" id="gpuModalButtons">
+                <button class="btn" onclick="skipGPUSetup()">Skip</button>
+                <button class="btn" onclick="startGPUDownload()" style="background: #667eea; color: white; border-color: #667eea;">Download (~600MB)</button>
             </div>
         </div>
     </div>
@@ -1628,6 +1663,121 @@
             }
         }
 
+        // GPU Setup Functions
+        async function checkGPUSetup() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/gpu/info`);
+                const data = await response.json();
+
+                console.log('🔍 GPU Info:', data);
+
+                if (data.success && data.gpu_available && !data.libs_installed) {
+                    // Check if user has already dismissed this prompt
+                    const dismissed = localStorage.getItem('gpuSetupDismissed');
+                    if (!dismissed) {
+                        setTimeout(() => {
+                            document.getElementById('gpuSetupModal').classList.remove('hidden');
+                        }, 1000);
+                    } else {
+                        console.log('⏭️ GPU setup was previously dismissed');
+                    }
+                } else if (!data.gpu_available) {
+                    console.log('ℹ️ No NVIDIA GPU detected');
+                } else if (data.libs_installed) {
+                    console.log('✅ GPU libraries already installed');
+                }
+            } catch (error) {
+                console.error('❌ Error checking GPU setup:', error);
+            }
+        }
+
+        function skipGPUSetup() {
+            localStorage.setItem('gpuSetupDismissed', 'true');
+            document.getElementById('gpuSetupModal').classList.add('hidden');
+        }
+
+        async function manualGPUSetup() {
+            // Clear dismissed flag and recheck
+            localStorage.removeItem('gpuSetupDismissed');
+            await checkGPUSetup();
+
+            // If modal didn't show, show info
+            const modal = document.getElementById('gpuSetupModal');
+            if (modal.classList.contains('hidden')) {
+                try {
+                    const response = await fetch(`${BACKEND_URL}/gpu/info`);
+                    const data = await response.json();
+
+                    if (!data.gpu_available) {
+                        alert('No NVIDIA GPU detected on this system.');
+                    } else if (data.libs_installed) {
+                        alert('GPU libraries are already installed!');
+                    } else {
+                        alert('Failed to show GPU setup dialog. Check console for errors.');
+                    }
+                } catch (error) {
+                    alert('Backend connection failed. Make sure the app is running.');
+                }
+            }
+        }
+
+        async function startGPUDownload() {
+            const modal = document.getElementById('gpuSetupModal');
+            const buttons = document.getElementById('gpuModalButtons');
+            const progress = document.getElementById('gpuDownloadProgress');
+            const progressBar = document.getElementById('gpuProgressBar');
+            const progressText = document.getElementById('gpuProgressText');
+
+            // Hide buttons, show progress
+            buttons.classList.add('hidden');
+            progress.classList.remove('hidden');
+
+            try {
+                progressText.textContent = 'Downloading GPU libraries...';
+                progressBar.style.width = '10%';
+
+                const response = await fetch(`${BACKEND_URL}/gpu/install`, {
+                    method: 'POST'
+                });
+
+                // Simulate progress (since actual download takes time)
+                let simulatedProgress = 10;
+                const progressInterval = setInterval(() => {
+                    if (simulatedProgress < 90) {
+                        simulatedProgress += 5;
+                        progressBar.style.width = simulatedProgress + '%';
+                    }
+                }, 2000);
+
+                const data = await response.json();
+                clearInterval(progressInterval);
+
+                if (data.success) {
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '✅ GPU libraries installed successfully!';
+
+                    // Store that setup is complete
+                    localStorage.setItem('gpuSetupDismissed', 'true');
+
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                        alert('✅ GPU libraries installed successfully!\n\n⚠️ IMPORTANT: You must close and restart the app for GPU acceleration to work.\n\nClose the app now and reopen it.');
+                    }, 2000);
+                } else {
+                    progressText.textContent = '❌ Installation failed: ' + (data.error || 'Unknown error');
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                    }, 3000);
+                }
+            } catch (error) {
+                console.error('❌ GPU download error:', error);
+                progressText.textContent = '❌ Download failed. Check your internet connection.';
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('🚀 Whisper4Windows UI Loaded');
@@ -1637,6 +1787,9 @@
             initializeModelDropdown();
             initializeThemeDropdown();
             initializeMicrophoneDropdown();
+
+            // Check if GPU setup is needed
+            setTimeout(checkGPUSetup, 1500);
 
             // Load theme
             const savedTheme = localStorage.getItem('theme') || 'system';

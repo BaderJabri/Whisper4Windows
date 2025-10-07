@@ -42,6 +42,20 @@ def setup_cuda_paths():
             Path(sys._MEIPASS) / "nvidia" / "cusparse" / "bin",
         ])
 
+    # Add downloaded GPU libraries from AppData (for optional GPU install)
+    appdata = Path(os.getenv('APPDATA') or os.path.expanduser('~'))
+    gpu_libs_dir = appdata / 'Whisper4Windows' / 'gpu_libs'
+    if gpu_libs_dir.exists():
+        logger.info(f"   Found downloaded GPU libraries: {gpu_libs_dir}")
+        cuda_paths.extend([
+            gpu_libs_dir / "nvidia" / "cublas" / "bin",
+            gpu_libs_dir / "nvidia" / "cudnn" / "bin",
+            gpu_libs_dir / "nvidia" / "cufft" / "bin",
+            gpu_libs_dir / "nvidia" / "curand" / "bin",
+            gpu_libs_dir / "nvidia" / "cusolver" / "bin",
+            gpu_libs_dir / "nvidia" / "cusparse" / "bin",
+        ])
+
     # System CUDA installation (check all versions)
     cuda_paths.extend([
         Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin"),
@@ -304,12 +318,12 @@ class WhisperEngine:
     ) -> Dict:
         """
         Transcribe audio data
-        
+
         Args:
             audio_data: Audio data as numpy array (float32, mono, 16kHz)
             language: Language code (e.g., 'en', 'es') or None for auto-detect
             task: 'transcribe' or 'translate'
-            
+
         Returns:
             Dictionary with transcription results
         """
@@ -321,20 +335,20 @@ class WhisperEngine:
                     "error": "Failed to load model",
                     "text": ""
                 }
-        
+
         try:
             logger.info(f"🎙️ Transcribing audio...")
             logger.info(f"   Audio shape: {audio_data.shape}")
             logger.info(f"   Audio dtype: {audio_data.dtype}")
             logger.info(f"   Language: {language or 'auto-detect'}")
-            
+
             # Ensure audio is float32 and 1D
             if audio_data.dtype != np.float32:
                 audio_data = audio_data.astype(np.float32)
-            
+
             if len(audio_data.shape) > 1:
                 audio_data = audio_data.flatten()
-            
+
             # Transcribe with optimized settings for speed
             segments, info = self.model.transcribe(
                 audio_data,
@@ -380,9 +394,34 @@ class WhisperEngine:
             }
             
         except Exception as e:
-            logger.error(f"❌ Transcription failed: {e}")
+            error_str = str(e)
+            logger.error(f"❌ Transcription failed: {error_str}")
             import traceback
             logger.error(traceback.format_exc())
+
+            # Check if this is a CUDA library error - if so, fall back to CPU
+            if "cublas64_12.dll" in error_str or "cudnn" in error_str.lower() or "cuda" in error_str.lower():
+                logger.warning("⚠️ CUDA library error detected - falling back to CPU...")
+
+                # Force reload model on CPU and update both instance and original device
+                self.device = "cpu"
+                self.compute_type = "int8"
+                self.is_loaded = False
+                self._original_device = "cpu"  # Permanently switch to CPU
+                self._cuda_detected = False  # Mark CUDA as unavailable
+
+                try:
+                    # Reload model on CPU
+                    if self.load_model():
+                        logger.info("✅ Model reloaded on CPU - retrying transcription...")
+                        logger.info("💡 Device permanently switched to CPU due to missing CUDA libraries")
+                        # Retry transcription on CPU
+                        return self.transcribe_audio(audio_data, language, task)
+                    else:
+                        logger.error("❌ Failed to reload model on CPU")
+                except Exception as cpu_error:
+                    logger.error(f"❌ CPU fallback also failed: {cpu_error}")
+
             return {
                 "success": False,
                 "error": str(e),

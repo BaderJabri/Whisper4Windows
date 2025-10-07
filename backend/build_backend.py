@@ -11,21 +11,12 @@ from pathlib import Path
 # Get the directory where this script is located
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Find NVIDIA CUDA libraries in site-packages
-venv_site_packages = Path(backend_dir) / "venv" / "Lib" / "site-packages"
-nvidia_dir = venv_site_packages / "nvidia"
+# CUDA libraries are now downloaded on-demand by gpu_manager.py
+# We no longer bundle them to keep installer small (~200MB instead of ~1.3GB)
+print("INFO: CUDA libraries will be downloaded on first run if GPU is detected")
+print("INFO: This keeps the installer size small (~200MB vs ~1.3GB)")
 
-# Build list of binary includes for CUDA libraries
 binary_includes = []
-if nvidia_dir.exists():
-    for lib_name in ['cublas', 'cudnn', 'cufft', 'curand', 'cusolver', 'cusparse']:
-        lib_bin = nvidia_dir / lib_name / "bin"
-        if lib_bin.exists():
-            # Add all DLLs from this library's bin folder
-            for dll in lib_bin.glob("*.dll"):
-                # Format: source;destination
-                binary_includes.append(f'--add-binary={dll};nvidia/{lib_name}/bin')
-                print(f"Including CUDA DLL: {dll.name}")
 
 PyInstaller.__main__.run([
     'main.py',

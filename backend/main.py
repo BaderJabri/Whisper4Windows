@@ -16,6 +16,7 @@ from pydantic import BaseModel
 # Import our modules
 from audio_capture import AudioCapture
 from whisper_engine import WhisperEngine
+import gpu_manager
 
 # Configure logging
 logging.basicConfig(
@@ -141,14 +142,19 @@ async def start_recording(request: StartRequest):
         
         logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
         logger.info(f"📋 Requested device: {request.device}")
-        
-        # Initialize Whisper engine (model will load on transcription)
-        whisper_engine = WhisperEngine(
-            model_size=request.model_size,
-            device=request.device
-        )
-        
-        logger.info(f"✓ Whisper engine ready (device: {whisper_engine.device})")
+
+        # Reuse existing engine if model/device match, otherwise create new one
+        if whisper_engine is not None and \
+           whisper_engine.model_size == request.model_size and \
+           whisper_engine._original_device == request.device:
+            logger.info(f"♻️ Reusing existing Whisper engine (device: {whisper_engine.device})")
+        else:
+            # Initialize new Whisper engine (model will load on transcription)
+            whisper_engine = WhisperEngine(
+                model_size=request.model_size,
+                device=request.device
+            )
+            logger.info(f"✓ Whisper engine created (device: {whisper_engine.device})")
         
         # Initialize audio capture
         audio_capture = AudioCapture()
@@ -362,10 +368,10 @@ async def list_devices():
     try:
         import sounddevice as sd
         devices = sd.query_devices()
-        
+
         input_devices = []
         output_devices = []
-        
+
         for i, dev in enumerate(devices):
             device_info = {
                 "id": i,
@@ -373,18 +379,18 @@ async def list_devices():
                 "channels": dev["max_input_channels"] if dev["max_input_channels"] > 0 else dev["max_output_channels"],
                 "sample_rate": int(dev["default_samplerate"])
             }
-            
+
             if dev["max_input_channels"] > 0:
                 input_devices.append(device_info)
             if dev["max_output_channels"] > 0:
                 output_devices.append(device_info)
-        
+
         return {
             "success": True,
             "inputs": input_devices,
             "outputs": output_devices
         }
-        
+
     except Exception as e:
         logger.error(f"Error listing devices: {e}")
         return {
@@ -392,6 +398,82 @@ async def list_devices():
             "error": str(e),
             "inputs": [],
             "outputs": []
+        }
+
+
+@app.get("/gpu/info")
+async def get_gpu_info():
+    """Get GPU and library installation status"""
+    try:
+        info = gpu_manager.get_gpu_info()
+        return {
+            "success": True,
+            **info
+        }
+    except Exception as e:
+        logger.error(f"Error getting GPU info: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.post("/gpu/install")
+async def install_gpu_libs():
+    """Download and install GPU libraries (blocking operation)"""
+    try:
+        logger.info("🚀 Starting GPU library installation...")
+
+        # Run installation synchronously (this will take a while)
+        loop = asyncio.get_event_loop()
+        success = await loop.run_in_executor(
+            None,
+            gpu_manager.install_gpu_libs
+        )
+
+        if success:
+            logger.info("✅ GPU libraries installed successfully")
+            return {
+                "success": True,
+                "message": "GPU libraries installed successfully. Restart may be required."
+            }
+        else:
+            logger.error("❌ GPU library installation failed")
+            return {
+                "success": False,
+                "error": "Installation failed. Check logs for details."
+            }
+
+    except Exception as e:
+        logger.error(f"❌ GPU installation error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.post("/gpu/uninstall")
+async def uninstall_gpu_libs():
+    """Remove installed GPU libraries"""
+    try:
+        success = gpu_manager.uninstall_gpu_libs()
+        if success:
+            return {
+                "success": True,
+                "message": "GPU libraries removed successfully"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to remove GPU libraries"
+            }
+    except Exception as e:
+        logger.error(f"Error uninstalling GPU libs: {e}")
+        return {
+            "success": False,
+            "error": str(e)
         }
 
 

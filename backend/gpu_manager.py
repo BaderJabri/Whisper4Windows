@@ -73,29 +73,30 @@ def are_gpu_libs_installed() -> bool:
         logger.warning(f"Missing nvidia directory")
         return False
 
-    # Check for at least one critical DLL (cublas is most important)
-    critical_patterns = [
-        "nvidia/cublas/bin/cublas64*.dll",
-        "nvidia/cudnn/bin/cudnn*.dll",
-    ]
+    # Check for BOTH cublas AND cudnn (both are required for GPU acceleration)
+    critical_dlls = {
+        "cublas": "nvidia/cublas/bin/cublas64*.dll",
+        "cudnn": "nvidia/cudnn/bin/cudnn_ops64*.dll",  # Most critical cuDNN DLL
+    }
 
-    found_dlls = []
-    for pattern in critical_patterns:
+    missing_libs = []
+    found_dlls = {}
+
+    for lib_name, pattern in critical_dlls.items():
         matching = list(gpu_dir.glob(pattern))
         if matching:
-            found_dlls.append(pattern)
+            found_dlls[lib_name] = str(matching[0])
+            logger.info(f"✅ Found {lib_name}: {matching[0].name}")
         else:
-            logger.warning(f"No DLLs matching pattern: {pattern}")
+            missing_libs.append(lib_name)
+            logger.warning(f"❌ Missing {lib_name}: no DLLs matching {pattern}")
 
-    # Need at least cublas
-    has_cublas = any("cublas" in p for p in found_dlls)
-
-    if has_cublas:
-        logger.info(f"✅ Found GPU libraries: {found_dlls}")
-        return True
-    else:
-        logger.warning(f"Missing critical CUDA libraries")
+    if missing_libs:
+        logger.warning(f"Missing critical CUDA libraries: {', '.join(missing_libs)}")
         return False
+
+    logger.info(f"✅ All required GPU libraries present: {', '.join(found_dlls.keys())}")
+    return True
 
 
 def get_download_size() -> int:
@@ -129,8 +130,34 @@ def install_gpu_libs(progress_callback=None) -> bool:
             # Use pip to download packages
             import subprocess
 
-            # Find pip executable - use python from PATH, not sys.executable (which might be bundled app)
-            pip_cmd = "pip" if not getattr(sys, 'frozen', False) else "pip"
+            # Find pip executable - prefer system Python's pip over bundled app
+            pip_cmd = None
+
+            # Try to find pip in common locations
+            pip_locations = [
+                "pip",  # PATH
+                sys.executable.replace(".exe", "") + "-m pip" if not getattr(sys, 'frozen', False) else None,
+                "python -m pip",  # Fallback to python -m pip
+                "py -m pip",  # Windows Python Launcher
+            ]
+
+            for pip_test in pip_locations:
+                if pip_test is None:
+                    continue
+                try:
+                    test_cmd = pip_test.split() + ["--version"]
+                    result = subprocess.run(test_cmd, capture_output=True, timeout=5)
+                    if result.returncode == 0:
+                        pip_cmd = pip_test.split()
+                        logger.info(f"✅ Found pip: {pip_test}")
+                        break
+                except Exception as e:
+                    logger.debug(f"pip test failed for {pip_test}: {e}")
+                    continue
+
+            if not pip_cmd:
+                logger.error("❌ Could not find pip executable")
+                return False
 
             packages = list(CUDA_PACKAGES.keys())
             total_packages = len(packages)
@@ -142,16 +169,22 @@ def install_gpu_libs(progress_callback=None) -> bool:
 
                 logger.info(f"Installing {package}...")
 
-                # Download package using pip
-                # Use 'pip' from PATH instead of sys.executable to avoid running the app .exe
+                # Download package using pip with timeout (10 min for large cuDNN download)
+                cmd = pip_cmd + [
+                    "install",
+                    "--target", str(temp_dir),
+                    "--no-deps",
+                    "--no-warn-script-location",
+                    package
+                ]
+
+                logger.info(f"Running: {' '.join(cmd)}")
+
                 result = subprocess.run(
-                    [pip_cmd, "install",
-                     "--target", str(temp_dir),
-                     "--no-deps",
-                     "--no-warn-script-location",
-                     package],
+                    cmd,
                     capture_output=True,
                     text=True,
+                    timeout=600,  # 10 minute timeout for large downloads
                     creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
                 )
 
@@ -162,6 +195,7 @@ def install_gpu_libs(progress_callback=None) -> bool:
                     return False
 
                 logger.info(f"✅ {package} installed successfully")
+                logger.debug(f"  stdout: {result.stdout[:200]}")
 
             if progress_callback:
                 progress_callback(90, "Organizing libraries...")
@@ -174,14 +208,28 @@ def install_gpu_libs(progress_callback=None) -> bool:
                 if target_nvidia.exists():
                     shutil.rmtree(target_nvidia)
                 shutil.move(str(temp_nvidia), str(target_nvidia))
+                logger.info(f"✅ Moved libraries to: {target_nvidia}")
+            else:
+                logger.error(f"❌ nvidia folder not found in temp: {temp_nvidia}")
+                return False
 
-            # Create marker file
+            # Verify installation before marking as complete
+            if progress_callback:
+                progress_callback(95, "Verifying installation...")
+
+            if not are_gpu_libs_installed():
+                logger.error("❌ Installation verification failed - missing required DLLs")
+                logger.error("   This usually means cuDNN download failed (630MB file)")
+                logger.error("   Try again with a stable internet connection")
+                return False
+
+            # Create marker file only after verification succeeds
             (gpu_dir / ".installed").touch()
 
             if progress_callback:
                 progress_callback(100, "Installation complete!")
 
-            logger.info("✅ GPU libraries installed successfully")
+            logger.info("✅ GPU libraries installed and verified successfully")
             return True
 
         finally:

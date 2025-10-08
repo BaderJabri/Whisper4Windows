@@ -18,7 +18,7 @@ Your voice never leaves your computer. No cloud, no API keys, no subscriptions. 
 
 ### ⚡ **Lightning Fast**
 
-With GPU acceleration, transcribe 5 seconds of speech in under 2 seconds. No waiting, no buffering - just instant results.
+With GPU acceleration, transcribe 5 seconds of speech in 0.5-2 seconds. No waiting, no buffering - just instant results. CPU fallback available for all systems.
 
 ### 🎯 **Works Everywhere**
 
@@ -26,7 +26,7 @@ Press F9 from any app - Word, Chrome, Slack, VSCode - speak your thoughts, and w
 
 ### 🌍 **Truly Multilingual**
 
-Supports 99 languages with automatic detection. Switch between languages effortlessly or lock to your preferred ones for better accuracy.
+Supports 99 languages with automatic detection. Switch between languages effortlessly or lock to your preferred ones for better accuracy. Language detection works automatically or you can specify a language for better performance.
 
 ---
 
@@ -58,11 +58,11 @@ Customize Whisper4Windows to work exactly how you want:
 
 ### **Key Settings:**
 
-- **🎯 Model Quality** - Balance speed vs accuracy (Tiny → Large V3)
-- **⚙️ Processing Device** - Auto-detect or force GPU/CPU
-- **🌍 Languages** - Auto-detect all 99 languages or pick your favorites
-- **🎤 Microphone** - Select from all available input devices
-- **🔊 Sound Effects** - Customizable beeps with volume control
+- **🎯 Model Quality** - Balance speed vs accuracy (tiny, base, small, medium, large-v3)
+- **⚙️ Processing Device** - Auto-detect or force GPU/CPU with automatic fallback
+- **🌍 Languages** - Auto-detect all 99 languages or specify a language for better performance
+- **🎤 Microphone** - Select from all available input devices with device index selection
+- **⌨️ Keyboard Shortcuts** - Customize toggle (default: F9) and cancel (default: Escape) shortcuts
 - **📋 Clipboard** - Keep text in clipboard or auto-restore previous content
 - **🎨 Themes** - Light, dark, or system-matched appearance
 
@@ -129,6 +129,7 @@ Watch it appear instantly! ✨
 
 - **GPU Mode:** 5 seconds of speech → 0.5-2 seconds transcription ⚡
 - **CPU Mode:** 5 seconds of speech → 5-15 seconds transcription
+- **Model Sizes:** tiny (fastest) → base → small (recommended) → medium → large-v3 (most accurate)
 
 📖 **[Installation guide →](INSTALLATION.md)** | **[Build your own MSI →](BUILD.md)**
 

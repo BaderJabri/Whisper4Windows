@@ -1,1857 +1,412 @@
-# Whisper4Windows - Technical Documentation
+# 🔧 Technical Documentation
 
-**Version:** 1.0
-**Last Updated:** 2025-10-03
-**Purpose:** Complete technical reference for AI assistants and developers
+Comprehensive technical guide for Whisper4Windows developers and contributors.
 
----
+## 🏗️ Architecture Overview
 
-## Table of Contents
-
-1. [System Overview](#system-overview)
-2. [Architecture](#architecture)
-3. [Technologies](#technologies)
-4. [Component Details](#component-details)
-5. [Data Flow](#data-flow)
-6. [Key Implementation Details](#key-implementation-details)
-7. [File Structure](#file-structure)
-8. [Build & Deployment](#build--deployment)
-9. [Known Issues & Solutions](#known-issues--solutions)
-10. [Design Decisions](#design-decisions)
-
----
-
-## System Overview
-
-### Purpose
-Whisper4Windows is a local, GPU-accelerated speech-to-text application for Windows that allows users to dictate text anywhere using a global hotkey (F9). The transcribed text is automatically injected into the active text field.
-
-### Inspiration
-Inspired by SuperWhisper (Mac app), this is a Windows implementation with similar UX but different technical architecture.
-
-### Core Features
-- **Global Hotkeys**: Customizable shortcuts (default F9/Escape) - OS-level, work anywhere
-- **Dynamic Shortcut Registration**: Change shortcuts in settings without restart
-- **Minimal Overlay**: 616×140px window at top center of screen
-- **Live Audio Visualization**: 80 animated bars showing real-time audio levels from backend
-- **GPU Acceleration**: NVIDIA CUDA support via faster-whisper
-- **Clipboard-based Injection**: Text inserted via Ctrl+V simulation (not character-by-character)
-- **State Management**: Auto-resets when window becomes visible
-- **Multi-Language Support**: 99 languages with searchable dropdown and auto-detection
-- **Microphone Selection**: Choose input device from system audio devices
-- **Sound Effects**: Configurable beep sounds triggered from Rust on shortcut use
-- **Clipboard Settings**: Toggle to save/skip clipboard saving when injecting text
-- **Theme Support**: Light, Dark, and System theme options with CSS variables
-- **Custom Dropdowns**: Searchable language selector with consistent styling across all dropdowns
-
----
-
-## Architecture
-
-### Two-Process Architecture
+Whisper4Windows uses a **sidecar architecture** with a Rust frontend and Python backend:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        User's Desktop                        │
-│  ┌────────────────┐                  ┌──────────────────┐  │
-│  │  Any Text App  │◄─────────────────┤  Clipboard +     │  │
-│  │  (Notepad, etc)│  Ctrl+V Inject   │  SendInput API   │  │
-│  └────────────────┘                  └──────────────────┘  │
-│         ▲                                      ▲            │
-│         │                                      │            │
-│         │                              ┌───────┴───────┐   │
-│         │                              │   Frontend    │   │
-│         │                              │   (Tauri)     │   │
-│         │                              │               │   │
-│         │                              │  - Rust core  │   │
-│         │                              │  - WebView UI │   │
-│         │                              │  - Global F9  │   │
-│         │                              │  - Global Esc │   │
-│         │                              └───────┬───────┘   │
-│         │                                      │            │
-│         │                              HTTP Polling         │
-│         │                              /audio_level         │
-│         │                                      │            │
-│         │                              ┌───────▼───────┐   │
-│         │                              │   Backend     │   │
-│         │                              │   (FastAPI)   │   │
-│         │                              │               │   │
-│         │                              │  - Whisper    │   │
-│         └──────────────────────────────┤  - Audio Cap  │   │
-│               Transcription Result     │  - Port 8000  │   │
-│                                        └───────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────┐    HTTP/JSON    ┌─────────────────┐
+│   Rust Frontend │ ◄─────────────► │  Python Backend │
+│   (Tauri App)   │                 │  (FastAPI)      │
+└─────────────────┘                 └─────────────────┘
+         │                                   │
+         │                                   │
+    ┌─────────┐                        ┌─────────┐
+    │ System  │                        │ Whisper │
+    │ Tray    │                        │ Engine  │
+    └─────────┘                        └─────────┘
 ```
 
-### Communication Flow
-
-1. **User Presses F9 (First Time)**
-   - Frontend (Rust) → Backend: POST /start
-   - Backend starts audio recording
-   - Frontend shows overlay window at top center
-   - Frontend polls GET /audio_level every 100ms
-   - Visualizer bars animate based on RMS levels
-
-2. **User Presses F9 (Second Time)**
-   - Frontend (Rust) → Backend: POST /stop
-   - Backend stops recording, runs Whisper transcription
-   - Frontend hides window FIRST (to restore focus)
-   - Frontend waits 100ms
-   - Frontend injects text via clipboard + Ctrl+V
-   - Window stays hidden until next F9
-
-3. **User Presses Esc**
-   - Frontend (Rust) → Backend: POST /cancel
-   - Backend discards recording
-   - Frontend hides window immediately
-
----
-
-## Technologies
-
-### Frontend (Tauri + Rust)
-
-**Framework:** Tauri 2.8.5
-- Cross-platform desktop app framework
-- Uses system WebView2 (Chromium-based)
-- Rust backend, HTML/CSS/JS frontend
-
-**Key Rust Crates:**
-```toml
-tauri = "2.8.5"                    # Main framework
-tauri-plugin-log = "2.7.0"         # Logging to stdout/file
-tauri-plugin-global-shortcut = "2.3.0"  # OS-level hotkeys
-tokio = "1.0"                      # Async runtime
-reqwest = "0.11"                   # HTTP client for backend
-windows = "0.52"                   # Windows API bindings
-anyhow = "1.0"                     # Error handling
-serde_json = "1.0"                 # JSON serialization
-```
-
-**Windows APIs Used:**
-- `OpenClipboard`, `CloseClipboard`, `EmptyClipboard`, `SetClipboardData` - Clipboard operations
-- `GlobalAlloc`, `GlobalLock`, `GlobalUnlock` - Memory allocation for clipboard
-- `SendInput` - Keyboard input simulation (Ctrl+V)
-- `VK_CONTROL`, `VK_V` - Virtual key codes
-
-### Backend (Python + FastAPI)
-
-**Framework:** FastAPI 0.100+
-- Modern async Python web framework
-- Auto-generates OpenAPI docs at /docs
-- Runs on http://127.0.0.1:8000
-
-**Key Python Packages:**
-```
-fastapi         # Web framework
-uvicorn         # ASGI server
-faster-whisper  # Optimized Whisper implementation
-sounddevice     # Audio capture (WASAPI on Windows)
-numpy           # Audio data processing
-torch           # PyTorch (for GPU)
-ctranslate2     # Efficient inference engine
-```
-
-**CUDA/cuDNN (Optional):**
-- CUDA Toolkit 12.6+
-- cuDNN 9.x
-- Provides 10x speedup on NVIDIA GPUs
-
-### Frontend UI (HTML/CSS/JavaScript)
-
-**No Framework** - Vanilla JavaScript
-- Lightweight, fast startup
-- Direct DOM manipulation
-- Uses Tauri's `__TAURI_INTERNALS__` API
-
-**Key Features:**
-- 80 SVG-like bars for audio visualization
-- CSS animations for pulsing dot
-- JavaScript `setInterval` for polling
-- `Math.sin()` for wave animations
-
----
-
-## Component Details
-
-### Frontend: `src-tauri/src/lib.rs`
-
-**Purpose:** Main Rust application logic
-
-**Key Structures:**
-
-```rust
-pub struct AppState {
-    pub selected_model: Arc<Mutex<String>>,           // "tiny", "base", "small", "medium", "large-v3"
-    pub selected_device: Arc<Mutex<String>>,          // "auto", "cpu", "cuda"
-    pub selected_microphone: Arc<Mutex<Option<i32>>>, // Device index for microphone selection
-    pub use_clipboard: Arc<Mutex<bool>>,              // Whether to save text to clipboard
-    pub selected_language: Arc<Mutex<String>>,        // Selected language code (e.g., "en", "auto")
-    pub toggle_shortcut: Arc<Mutex<String>>,          // Toggle recording shortcut (e.g., "F9")
-    pub cancel_shortcut: Arc<Mutex<String>>,          // Cancel recording shortcut (e.g., "Escape")
-    pub backend_child: Arc<Mutex<Option<CommandChild>>>, // Backend process handle for cleanup
-}
-```
-
-**Key Functions:**
-
-1. **`inject_text(text: &str, save_to_clipboard: bool) -> Result<()>`**
-   - Converts text to UTF-16
-   - Opens Windows clipboard
-   - Optionally saves old clipboard content (if save_to_clipboard is false)
-   - Copies text to clipboard
-   - Simulates Ctrl+V keypress
-   - Restores old clipboard content (if save_to_clipboard is false)
-   - Uses `SendInput` with KEYEVENTF_EXTENDEDKEY flags
-   - **Critical:** Must be called AFTER window is hidden to preserve text field focus
-
-2. **`cmd_start_recording(app, state) -> Result<()>`**
-   - Calculates window position: `(screen_width - 616) / 2, 50`
-   - Shows window at top center
-   - Sends POST /start to backend with model/device/microphone/languages
-   - **Does NOT** set focus (prevents deselecting text field)
-
-3. **`cmd_stop_recording(app, state) -> Result<()>`**
-   - Sends POST /stop to backend
-   - Waits for transcription response
-   - **Hides window FIRST** (critical for injection)
-   - Waits 100ms for focus to return
-   - Injects text via `inject_text()` with clipboard setting from state
-
-4. **`cmd_toggle_recording(app, state) -> Result<()>`**
-   - Checks `window.is_visible()`
-   - If visible → calls `cmd_stop_recording()`
-   - If hidden → calls `cmd_start_recording()`
-
-5. **`cmd_cancel_recording(app) -> Result<()>`**
-   - Sends POST /cancel to backend
-   - Hides window immediately
-   - No text injection
-
-**Tauri Commands:**
-
-1. **`set_preferred_languages(languages: Vec<String>, state: State<AppState>)`**
-   - Updates the preferred languages in AppState
-   - Languages stored in Arc<Mutex<Vec<String>>>
-   - Called from frontend settings
-
-2. **`get_preferred_languages(state: State<AppState>) -> Vec<String>`**
-   - Returns current preferred languages
-   - Used to populate settings UI
-
-3. **`set_microphone(device_index: Option<i32>, state: State<AppState>)`**
-   - Updates selected microphone device index
-   - Stored in Arc<Mutex<Option<i32>>>
-   - Called when user changes microphone selection
-
-4. **`get_microphone(state: State<AppState>) -> Option<i32>`**
-   - Returns currently selected microphone device index
-   - Used to restore selection in UI
-
-5. **`set_clipboard_setting(use_clipboard: bool, state: State<AppState>)`**
-   - Updates clipboard save preference
-   - Stored in Arc<Mutex<bool>>
-   - Determines whether to preserve old clipboard content
-
-6. **`get_clipboard_setting(state: State<AppState>) -> bool`**
-   - Returns current clipboard setting
-   - Used to restore toggle state in UI
-
-**Global Shortcuts Setup:**
-
-```rust
-// F9 shortcut
-let f9_shortcut = Shortcut::new(None, Code::F9);
-
-// Esc shortcut
-let esc_shortcut = Shortcut::new(None, Code::Escape);
-
-// Handler checks ShortcutState::Pressed only (not Released)
-// Prevents double-triggering
-```
-
-**Window Configuration:**
-
-```rust
-WebviewWindowBuilder::new(app, "recording", ...)
-    .inner_size(616.0, 140.0)      // 22:5 aspect ratio
-    .position(0.0, 50.0)            // Will be re-centered when shown
-    .always_on_top(true)            // Stay above all windows
-    .skip_taskbar(true)             // Don't show in taskbar
-    .decorations(false)             // No title bar
-    .transparent(true)              // Transparent background
-    .focused(false)                 // Don't steal focus
-```
-
-### Frontend: `dist/recording.html`
-
-**Purpose:** Overlay UI with visualizer and controls
-
-**Structure:**
-
-```html
-<div class="container">  <!-- 616px width -->
-  <div class="top-section">
-    <div class="dot"></div>  <!-- Pulsing blue dot -->
-    <select id="modelSelect">...</select>
-    <div id="statusText">Recording...</div>
-  </div>
-
-  <div id="visualizer">  <!-- 80 bars created dynamically -->
-  </div>
-
-  <div class="buttons">
-    <button onclick="stopRecording()">Stop   F9</button>
-    <button onclick="cancelRecording()">Cancel   Esc</button>
-  </div>
-</div>
-```
-
-**Sound Effects System:**
-
-Uses Web Audio API to play beep sounds on recording start/stop:
-
-```javascript
-// Settings loaded from localStorage
-const soundEffectsEnabled = localStorage.getItem('soundEffects') !== 'false';
-const volume = parseInt(localStorage.getItem('volume') || '50') / 100;
-
-// Play sound using AudioContext
-function playSound(frequency, duration) {
-    if (!soundEffectsEnabled) return;
-
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.value = frequency;  // 800Hz for start, 400Hz for stop
-    oscillator.type = 'sine';
-
-    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + duration);
-}
-
-// Usage
-playSound(800, 0.1);   // Recording start: 800Hz, 0.1s
-playSound(400, 0.15);  // Recording stop: 400Hz, 0.15s
-```
-
-**Theme System:**
-
-CSS variables for theming with Light, Dark, and System modes:
-
-```css
-/* Theme variables */
-:root {
-    --bg-main: #ffffff;
-    --bg-sidebar: #f8f9fa;
-    --bg-card: #ffffff;
-    --text-primary: #1a1a1a;
-    --text-secondary: #6b7280;
-    --border-color: #e5e7eb;
-    --accent-color: #3b82f6;
-}
-
-[data-theme="dark"] {
-    --bg-main: #1a1a1a;
-    --bg-sidebar: #111111;
-    --bg-card: #2a2a2a;
-    --text-primary: #ffffff;
-    --text-secondary: #9ca3af;
-    --border-color: #374151;
-    --accent-color: #60a5fa;
-}
-
-/* Applied via JavaScript */
-document.documentElement.setAttribute('data-theme', theme);
-```
-
-Theme is stored in localStorage and applied on page load. System theme matches OS preference using `window.matchMedia('(prefers-color-scheme: dark)')`.
-
-**Key CSS:**
-
-```css
-.visualizer-bar {
-    width: 3px;
-    background: #3b82f6;
-    transition: height 0.08s ease;
-    min-height: 3px;
-}
-
-/* Pulsing dot animation */
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.9); }
-}
-```
-
-**Key JavaScript Variables:**
-
-```javascript
-let bars = [];                    // Array of 80 bar elements
-let audioLevelInterval = null;    // setInterval ID for polling
-let isProcessing = false;         // Flag to prevent polling during transcription
-let waveAnimationInterval = null; // setInterval ID for wave animation
-let wasVisible = false;           // Track visibility changes
-```
-
-**Key JavaScript Functions:**
-
-1. **`initVisualizer()`**
-   - Creates 80 `<div class="visualizer-bar">`
-   - Appends to `#visualizer`
-   - Stores in `bars[]` array
-
-2. **`loadAudioDevices()`**
-   - Fetches `http://127.0.0.1:8000/devices`
-   - Gets list of input/output devices
-   - Populates microphone dropdown with device names
-   - Restores selected device from localStorage
-   - Called on page load
-
-3. **`pollAudioLevels()`**
-   - Fetches `http://127.0.0.1:8000/audio_level`
-   - Gets `{level: 0.0-1.0, recording: bool}`
-   - Calls `updateVisualizerFromLevel(level)`
-   - Runs every 100ms when recording
-
-4. **`updateVisualizerFromLevel(level)`**
-   - Creates wave pattern: `Math.sin(offset + Date.now() / 200)`
-   - Height calculation: `Math.max(3, level * 50 * wave)`
-   - Updates each bar's height
-
-5. **`showProcessing()`**
-   - Sets `isProcessing = true`
-   - Stops audio polling
-   - Changes status text to "Processing..."
-   - Starts wave animation: `Math.sin(waveOffset + delay) * 12 + 12`
-   - Wave travels across bars by incrementing `waveOffset += 0.15`
-   - Plays stop sound: `playSound(400, 0.15)`
-
-6. **`resetToRecording()`**
-   - Resets `isProcessing = false`
-   - Clears wave animation
-   - Resets status to "Recording..."
-   - Resets all bars to 3px height
-   - Starts audio polling
-   - Plays start sound: `playSound(800, 0.1)`
-   - **Called automatically when window becomes visible**
-
-7. **`stopRecording()` (button click)**
-   - Calls `showProcessing()`
-   - Sends POST /stop
-   - Gets transcription
-   - Injects via `invoke('inject_text_directly')`
-   - Hides window
-   - Resets state
-
-**Visibility Polling:**
-
-```javascript
-setInterval(async () => {
-    const isVisible = await currentWindow.isVisible();
-
-    if (isVisible && !wasVisible) {
-        resetToRecording();  // Auto-reset on show
-    } else if (!isVisible && wasVisible) {
-        stopMonitoring();
-    }
-
-    wasVisible = isVisible;
-}, 500);
-```
-
-### Backend: `main.py`
-
-**Purpose:** FastAPI server with Whisper integration
-
-**Global State:**
-
-```python
-audio_capture: Optional[AudioCapture] = None
-whisper_engine: Optional[WhisperEngine] = None
-is_recording = False
-```
-
-**Key Endpoints:**
-
-1. **`GET /devices`**
-   ```python
-   Response: {
-       "devices": [
-           {"index": 0, "name": "Microphone (Realtek)", "type": "input", "channels": 2},
-           {"index": 1, "name": "Speakers (Realtek)", "type": "output", "channels": 2},
-           ...
-       ]
-   }
-   ```
-   - Returns list of all available audio input/output devices
-   - Uses `sounddevice.query_devices()` to enumerate system devices
-   - Includes device index, name, type (input/output), and channel count
-   - Frontend uses this to populate microphone selection dropdown
-
-2. **`POST /start`**
-   ```python
-   Request: {
-       "model_size": "small",
-       "language": "en",
-       "device": "auto",
-       "device_index": 0,          // Optional microphone device index
-       "preferred_languages": []    // Optional list of preferred languages
-   }
-   Response: {
-       "status": "started",
-       "model": "small",
-       "device": "cuda"  # or "cpu"
-   }
-   ```
-   - Initializes `WhisperEngine` (doesn't load model yet)
-   - Creates `AudioCapture` instance with optional device_index
-   - Starts audio stream from selected microphone
-   - Stores preferred_languages for transcription
-   - Sets `is_recording = True`
-
-3. **`POST /stop`**
-   ```python
-   Response: {
-       "status": "success",
-       "text": "transcribed text here",
-       "duration": 5.2,
-       "transcription_time": 0.8,
-       "language": "en"  # Detected or specified language
-   }
-   ```
-   - Stops audio stream
-   - Collects all audio chunks
-   - Loads Whisper model (if not loaded)
-   - Runs transcription with preferred_languages if specified
-   - Auto-detects language or uses preferred languages to limit detection
-   - Returns text + metadata including detected language
-
-4. **`POST /cancel`**
-   ```python
-   Response: {
-       "status": "success",
-       "message": "Recording canceled"
-   }
-   ```
-   - Stops audio stream
-   - Discards audio data
-   - No transcription
-
-5. **`GET /audio_level`**
-   ```python
-   Response: {
-       "level": 0.0-1.0,  # RMS level, normalized
-       "recording": bool,
-       "queue_size": int
-   }
-   ```
-   - Peeks at audio queue (doesn't remove)
-   - Samples last 5 chunks
-   - Calculates RMS: `sqrt(mean(audio^2))`
-   - Normalizes: `min(1.0, rms * 3.0)`
-   - Returns level for visualizer
-
-### Backend: `audio_capture.py`
-
-**Purpose:** Microphone audio recording using sounddevice
-
-**Key Class:**
-
-```python
-class AudioCapture:
-    def __init__(self, sample_rate=16000, channels=1, device_index=None):
-        self.sample_rate = 16000  # Whisper requires 16kHz
-        self.channels = 1
-        self.device_index = device_index  # Optional specific microphone
-        self.audio_queue = queue.Queue()
-        self.stream = None
-```
-
-**Key Methods:**
-
-1. **`start_recording()`**
-   - Creates `sounddevice.InputStream` with optional device parameter
-   - Uses WASAPI backend on Windows
-   - If device_index specified, uses that microphone device
-   - If None, uses system default microphone
-   - Callback puts audio chunks in queue
-   - Returns immediately (non-blocking)
-
-2. **`stop_recording() -> np.ndarray`**
-   - Stops stream
-   - Concatenates all chunks from queue
-   - Returns float32 numpy array
-   - Shape: `(samples, 1)` or `(samples,)`
-
-3. **`_audio_callback(indata, frames, time_info, status)`**
-   - Called by sounddevice for each audio chunk
-   - Copies audio data to queue
-   - Logs warnings if status != OK
-
-### Backend: `whisper_engine.py`
-
-**Purpose:** Whisper model loading and transcription
-
-**Key Class:**
-
-```python
-class WhisperEngine:
-    def __init__(self, model_size="small", device="auto"):
-        self.model_size = model_size
-        self.device = self._detect_device(device)
-        self.model = None
-        self.is_loaded = False
-```
-
-**Device Detection:**
-
-```python
-def _detect_device(self, requested):
-    if requested == "cuda" or requested == "auto":
-        if torch.cuda.is_available():
-            return "cuda"
-    return "cpu"
-```
-
-**Model Loading:**
-
-```python
-def load_model():
-    from faster_whisper import WhisperModel
-
-    self.model = WhisperModel(
-        self.model_size,
-        device=self.device,
-        compute_type="float16" if self.device == "cuda" else "int8"
-    )
-```
-
-**Transcription:**
-
-```python
-def transcribe_audio(audio_data: np.ndarray, language="en", preferred_languages=None):
-    # If preferred_languages provided, use for auto-detection
-    # Otherwise use specified language or auto-detect from all languages
-    transcribe_params = {
-        "audio": audio_data,
-        "beam_size": 5,
-        "vad_filter": True  # Voice Activity Detection
-    }
-
-    if preferred_languages and len(preferred_languages) > 0:
-        # Limit auto-detection to preferred languages
-        transcribe_params["language"] = None  # Auto-detect
-        # Note: faster-whisper doesn't have direct preferred_languages param
-        # Language is auto-detected from audio
-    else:
-        transcribe_params["language"] = language
-
-    segments, info = self.model.transcribe(**transcribe_params)
-
-    text = " ".join([segment.text for segment in segments])
-    detected_language = info.language if hasattr(info, 'language') else language
-
-    return {
-        "success": True,
-        "text": text,
-        "language": detected_language
-    }
-```
-
-**Supported Languages:**
-- English (en)
-- Arabic (ar)
-- Chinese (zh)
-- French (fr)
-- German (de)
-- Spanish (es)
-- Italian (it)
-- Japanese (ja)
-- Korean (ko)
-- Portuguese (pt)
-- Russian (ru)
-- Hindi (hi)
-- Turkish (tr)
-- And many more supported by Whisper model
-
----
-
-## Data Flow
-
-### Complete Recording Cycle
-
-**Phase 1: Start Recording (F9 pressed, window hidden)**
-
-```
-1. User presses F9
-2. Rust detects F9 via global shortcut handler
-3. Rust checks window.is_visible() → false
-4. Rust calls cmd_start_recording()
-5. Rust calculates position: x = (screen_width - 616) / 2, y = 50
-6. Rust sets window position
-7. Rust shows window (does NOT set focus)
-8. Rust sends POST http://127.0.0.1:8000/start
-   Body: {"model_size": "small", "language": "en", "device": "auto"}
-9. Backend creates AudioCapture, starts stream
-10. Frontend JS detects window became visible
-11. Frontend JS calls resetToRecording()
-12. Frontend JS starts polling /audio_level every 100ms
-```
-
-**Phase 2: Recording (window visible)**
-
-```
-1. Audio flows: Microphone → WASAPI → sounddevice → Queue
-2. Every 100ms:
-   - Frontend fetches GET /audio_level
-   - Backend peeks last 5 chunks, calculates RMS
-   - Backend returns {level: 0.0-1.0}
-   - Frontend updates 80 bars with sin wave pattern
-3. User speaks, visualizer responds in real-time
-```
-
-**Phase 3: Stop Recording (F9 pressed again)**
-
-```
-1. User presses F9
-2. Rust detects F9 via global shortcut handler
-3. Rust checks window.is_visible() → true
-4. Rust calls cmd_stop_recording()
-5. Rust sends POST /stop
-6. Backend stops audio stream
-7. Backend concatenates all audio chunks
-8. Backend loads Whisper model (if not loaded) - takes 3-5 seconds first time
-9. Backend runs transcription (0.5-15 seconds depending on GPU/CPU)
-10. Backend returns {"status": "success", "text": "..."}
-11. Rust hides window FIRST
-12. Rust waits 100ms (focus returns to text field)
-13. Rust calls inject_text()
-14. Rust opens clipboard, copies text
-15. Rust simulates Ctrl+V
-16. Text appears in active text field!
-17. Frontend JS detects window became hidden
-18. Frontend JS stops audio polling
-```
-
-**Phase 4: Cancel (Esc pressed)**
-
-```
-1. User presses Esc
-2. Rust detects Esc via global shortcut handler
-3. Rust calls cmd_cancel_recording()
-4. Rust sends POST /cancel
-5. Backend discards audio
-6. Rust hides window
-7. No text injection
-```
-
----
-
-## Key Implementation Details
-
-### 1. Text Injection via Clipboard (Not Character-by-Character)
-
-**Problem:** Original implementation used `SendInput` with `KEYEVENTF_UNICODE` to send each character individually. This was slow and unreliable.
-
-**Solution:** Copy text to clipboard, then simulate Ctrl+V.
-
-**Code Flow:**
-```rust
-// Convert to UTF-16 (Windows clipboard format)
-let mut text_utf16: Vec<u16> = text.encode_utf16().collect();
-text_utf16.push(0);  // Null terminator
-
-// Open clipboard
-OpenClipboard(HWND::default())?;
-EmptyClipboard()?;
-
-// Allocate global memory
-let hmem = GlobalAlloc(GMEM_MOVEABLE, len)?;
-let locked = GlobalLock(hmem);
-
-// Copy text to clipboard
-std::ptr::copy_nonoverlapping(text_utf16.as_ptr(), locked as *mut u16, text_utf16.len());
-GlobalUnlock(hmem);
-
-// Set clipboard data (CF_UNICODETEXT = 13)
-SetClipboardData(CF_UNICODETEXT, HANDLE(hmem.0 as _))?;
-CloseClipboard()?;
-
-// Wait for clipboard to update
-tokio::time::sleep(Duration::from_millis(10)).await;
-
-// Simulate Ctrl+V
-let inputs = [
-    INPUT { ki: KEYBDINPUT { wVk: VK_CONTROL, dwFlags: KEYEVENTF_EXTENDEDKEY } },
-    INPUT { ki: KEYBDINPUT { wVk: VK_V, dwFlags: KEYEVENTF_EXTENDEDKEY } },
-    INPUT { ki: KEYBDINPUT { wVk: VK_V, dwFlags: KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP } },
-    INPUT { ki: KEYBDINPUT { wVk: VK_CONTROL, dwFlags: KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP } },
-];
-SendInput(&inputs, size_of::<INPUT>() as i32);
-```
-
-**Critical:** Must hide window BEFORE injection so focus returns to text field.
-
-### 2. Global Hotkeys Without Window Focus
-
-**Problem:** Initially tried using window-level keyboard events, but these require focus. This deselected the text field.
-
-**Solution:** Register F9 and Esc as OS-level global shortcuts.
-
-**Implementation:**
-```rust
-use tauri_plugin_global_shortcut::{Code, Shortcut, ShortcutState};
-
-let f9_shortcut = Shortcut::new(None, Code::F9);
-let esc_shortcut = Shortcut::new(None, Code::Escape);
-
-app.handle().plugin(
-    tauri_plugin_global_shortcut::Builder::new()
-        .with_handler(move |_app, shortcut, event| {
-            // Only trigger on PRESS, not RELEASE
-            if event.state == ShortcutState::Pressed {
-                if shortcut.matches(Modifiers::empty(), Code::F9) {
-                    // Handle F9
-                } else if shortcut.matches(Modifiers::empty(), Code::Escape) {
-                    // Handle Esc
-                }
-            }
-        })
-        .build()
-)?;
-
-app.global_shortcut().register(f9_shortcut)?;
-app.global_shortcut().register(esc_shortcut)?;
-```
-
-**Critical:** Filter for `ShortcutState::Pressed` only to prevent double-triggering on key release.
-
-### 3. Audio Visualization from Backend (Not WebView)
-
-**Problem:** Initially tried using WebView's `navigator.mediaDevices.getUserMedia()` but this accessed the mic even when window was hidden.
-
-**Solution:** Poll backend for audio levels from the recording stream.
-
-**Frontend (every 100ms):**
-```javascript
-async function pollAudioLevels() {
-    const response = await fetch('http://127.0.0.1:8000/audio_level');
-    const data = await response.json();
-    const level = data.level || 0;
-    updateVisualizerFromLevel(level);
-}
-```
-
-**Backend (peek at queue):**
-```python
-@app.get("/audio_level")
-async def get_audio_level():
-    if not is_recording or not audio_capture:
-        return {"level": 0.0, "recording": False}
-
-    # Sample last 5 chunks
-    chunks = []
-    temp_chunks = []
-    for _ in range(min(5, audio_capture.audio_queue.qsize())):
-        chunk = audio_capture.audio_queue.get_nowait()
-        temp_chunks.append(chunk)
-        chunks.append(chunk)
-
-    # Put them back
-    for chunk in temp_chunks:
-        audio_capture.audio_queue.put(chunk)
-
-    # Calculate RMS
-    audio_data = np.concatenate(chunks)
-    rms = np.sqrt(np.mean(audio_data ** 2))
-    normalized_level = min(1.0, rms * 3.0)
-
-    return {"level": float(normalized_level), "recording": True}
-```
-
-### 4. Wave Loading Animation
-
-**Problem:** User needed visual feedback during transcription processing.
-
-**Solution:** Traveling sine wave animation across bars.
-
-**Implementation:**
-```javascript
-function showProcessing() {
-    isProcessing = true;
-    stopMonitoring();  // Stop audio polling
-    document.getElementById('statusText').textContent = 'Processing...';
-
-    let waveOffset = 0;
-    waveAnimationInterval = setInterval(() => {
-        if (!isProcessing) {
-            clearInterval(waveAnimationInterval);
-            return;
-        }
-
-        bars.forEach((bar, index) => {
-            const delay = (index / bars.length) * Math.PI * 2;
-            const height = 10 + Math.sin(waveOffset + delay) * 12 + 12;
-            bar.style.height = `${height}px`;
-        });
-
-        waveOffset += 0.15;  // Increment creates traveling wave
-    }, 50);
-}
-```
-
-**Key:** `waveOffset` continuously increases, creating the illusion of a wave traveling from left to right.
-
-### 5. State Management with Auto-Reset
-
-**Problem:** After stopping recording, the window would stay in "Processing..." state when shown again.
-
-**Solution:** Detect window visibility changes and auto-reset to "Recording..." state.
-
-**Implementation:**
-```javascript
-let wasVisible = false;
-
-setInterval(async () => {
-    const isVisible = await currentWindow.isVisible();
-
-    // Window just became visible
-    if (isVisible && !wasVisible) {
-        resetToRecording();
-    }
-    // Window just became hidden
-    else if (!isVisible && wasVisible) {
-        stopMonitoring();
-    }
-
-    wasVisible = isVisible;
-}, 500);
-
-function resetToRecording() {
-    isProcessing = false;
-    if (waveAnimationInterval) {
-        clearInterval(waveAnimationInterval);
-        waveAnimationInterval = null;
-    }
-    document.getElementById('statusText').textContent = 'Recording...';
-    bars.forEach(bar => bar.style.height = '3px');
-    startMonitoring();
-}
-```
-
-### 6. Window Positioning at Top Center
-
-**Problem:** Window needs to be centered horizontally but at top of screen.
-
-**Solution:** Calculate position based on monitor size when showing.
-
-**Implementation:**
-```rust
-if let Some(monitor) = win.current_monitor()? {
-    let screen_size = monitor.size();
-    let window_size = win.outer_size()?;
-
-    let x = (screen_size.width as i32 - window_size.width as i32) / 2;
-    let y = 50;
-
-    win.set_position(tauri::PhysicalPosition::new(x, y))?;
-}
-```
-
-**Critical:** Done every time window is shown, not just on creation, in case user changes monitors.
-
-### 7. Sound Effects with Web Audio API
-
-**Problem:** Need audio feedback for recording start/stop without adding dependencies.
-
-**Solution:** Use Web Audio API to generate beep tones programmatically.
-
-**Implementation:**
-```javascript
-function playSound(frequency, duration) {
-    // Check if sound effects are enabled
-    const soundEffectsEnabled = localStorage.getItem('soundEffects') !== 'false';
-    if (!soundEffectsEnabled) return;
-
-    // Get volume setting (0-100)
-    const volume = parseInt(localStorage.getItem('volume') || '50') / 100;
-
-    // Create audio context and oscillator
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    // Configure tone
-    oscillator.frequency.value = frequency;  // Hz
-    oscillator.type = 'sine';                // Waveform
-
-    // Apply volume with fade out
-    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-    // Play
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + duration);
-}
-
-// Usage
-playSound(800, 0.1);   // Start: 800Hz for 0.1 seconds
-playSound(400, 0.15);  // Stop: 400Hz for 0.15 seconds
-```
-
-**Settings:**
-- Stored in localStorage: `soundEffects` (boolean), `volume` (0-100)
-- Higher frequency (800Hz) for start - more attention-grabbing
-- Lower frequency (400Hz) for stop - calming
-- Exponential fade out prevents clicking
-
-### 8. Microphone Device Selection
-
-**Problem:** Users may have multiple microphones and want to choose which one to use.
-
-**Solution:** Enumerate audio devices via backend, let user select from dropdown.
-
-**Implementation:**
-
-**Backend (main.py):**
-```python
-@app.get("/devices")
-async def get_devices():
-    import sounddevice as sd
-    devices = sd.query_devices()
-
-    device_list = []
-    for idx, device in enumerate(devices):
-        device_list.append({
-            "index": idx,
-            "name": device['name'],
-            "type": "input" if device['max_input_channels'] > 0 else "output",
-            "channels": device['max_input_channels']
-        })
-
-    return {"devices": device_list}
-```
-
-**Frontend (recording.html):**
-```javascript
-async function loadAudioDevices() {
-    const response = await fetch('http://127.0.0.1:8000/devices');
-    const data = await response.json();
-
-    const select = document.getElementById('microphoneSelect');
-    select.innerHTML = '';
-
-    // Filter for input devices only
-    const inputDevices = data.devices.filter(d => d.type === 'input');
-
-    inputDevices.forEach(device => {
-        const option = document.createElement('option');
-        option.value = device.index;
-        option.textContent = device.name;
-        select.appendChild(option);
-    });
-
-    // Restore saved selection
-    const savedDevice = localStorage.getItem('selectedMicrophone');
-    if (savedDevice !== null) {
-        select.value = savedDevice;
-    }
-}
-```
-
-**Rust (lib.rs):**
-```rust
-// Store in AppState
-pub selected_microphone: Arc<Mutex<Option<i32>>>,
-
-// Tauri command to set microphone
-#[tauri::command]
-fn set_microphone(device_index: Option<i32>, state: State<AppState>) -> Result<(), String> {
-    let mut mic = state.selected_microphone.lock().unwrap();
-    *mic = device_index;
-    Ok(())
-}
-```
-
-**Flow:**
-1. Frontend loads devices on page load
-2. User selects microphone from dropdown
-3. Selection saved to localStorage and Tauri state
-4. On recording start, device_index sent to backend
-5. AudioCapture uses specified device
-
-### 9. Multi-Language Support
-
-**Problem:** Users speak different languages and want accurate transcription.
-
-**Solution:** Support 13+ languages with optional preferred language selection.
-
-**Implementation:**
-
-**Supported Languages:**
-```javascript
-const languages = [
-    { code: 'en', name: 'English' },
-    { code: 'ar', name: 'Arabic' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'it', name: 'Italian' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'ko', name: 'Korean' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'hi', name: 'Hindi' },
-    { code: 'tr', name: 'Turkish' }
-];
-```
-
-**Preferred Languages:**
-- User can select multiple preferred languages in settings
-- Stored in Rust state: `Arc<Mutex<Vec<String>>>`
-- Sent to backend with /start request
-- Whisper auto-detects language from audio
-- Preferred languages list helps narrow down detection
-- Detected language returned in /stop response
-
-**Rust State Management:**
-```rust
-#[tauri::command]
-fn set_preferred_languages(languages: Vec<String>, state: State<AppState>) -> Result<(), String> {
-    let mut prefs = state.preferred_languages.lock().unwrap();
-    *prefs = languages;
-    Ok(())
-}
-
-#[tauri::command]
-fn get_preferred_languages(state: State<AppState>) -> Result<Vec<String>, String> {
-    let prefs = state.preferred_languages.lock().unwrap();
-    Ok(prefs.clone())
-}
-```
-
-### 10. Clipboard Settings
-
-**Problem:** Injecting text overwrites user's clipboard, losing copied data.
-
-**Solution:** Optional clipboard preservation - only save to clipboard if user wants it.
-
-**Implementation:**
-
-**Rust (lib.rs):**
-```rust
-fn inject_text(text: &str, save_to_clipboard: bool) -> Result<()> {
-    unsafe {
-        OpenClipboard(HWND::default())?;
-
-        // Save old clipboard content if not saving new text
-        let old_clipboard = if !save_to_clipboard {
-            Some(get_clipboard_content()?)  // Read current clipboard
-        } else {
-            None
-        };
-
-        // Copy new text and paste
-        EmptyClipboard()?;
-        set_clipboard_text(text)?;
-        CloseClipboard()?;
-
-        // Simulate Ctrl+V
-        simulate_ctrl_v()?;
-
-        // Restore old clipboard if needed
-        if let Some(old_text) = old_clipboard {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            OpenClipboard(HWND::default())?;
-            EmptyClipboard()?;
-            set_clipboard_text(&old_text)?;
-            CloseClipboard()?;
-        }
-    }
-    Ok(())
-}
-```
-
-**State Management:**
-```rust
-pub use_clipboard: Arc<Mutex<bool>>
-
-#[tauri::command]
-fn set_clipboard_setting(use_clipboard: bool, state: State<AppState>) -> Result<(), String> {
-    let mut setting = state.use_clipboard.lock().unwrap();
-    *setting = use_clipboard;
-    Ok(())
-}
-```
-
-**Frontend:**
-- Toggle in settings UI
-- Stored in localStorage and synced to Rust state
-- When true: transcribed text remains in clipboard
-- When false: old clipboard content is restored after paste
-
-### 11. Dynamic Shortcut Re-registration
-
-**Problem:** Users want to customize keyboard shortcuts, and changes should work immediately without restart.
-
-**Solution:** Parse shortcut strings, dynamically unregister old shortcuts, and register new ones.
-
-**Implementation:**
-
-**Shortcut Parser:**
-```rust
-fn parse_shortcut(shortcut_str: &str) -> Option<Shortcut> {
-    let parts: Vec<&str> = shortcut_str.split('+').collect();
-    let mut modifiers = Modifiers::empty();
-    let mut key_code: Option<Code> = None;
-
-    for part in parts {
-        match part.trim() {
-            "Ctrl" | "Control" => modifiers |= Modifiers::CONTROL,
-            "Alt" => modifiers |= Modifiers::ALT,
-            "Shift" => modifiers |= Modifiers::SHIFT,
-            "Super" | "Win" | "Meta" => modifiers |= Modifiers::SUPER,
-            "F9" => key_code = Some(Code::F9),
-            "\\" | "Backslash" => key_code = Some(Code::Backslash),
-            // ... more keys ...
-            _ => {}
-        }
-    }
-
-    if let Some(code) = key_code {
-        Some(Shortcut::new(Some(modifiers), code))
-    } else {
-        None
-    }
-}
-```
-
-**State Management:**
-```rust
-pub struct AppState {
-    pub toggle_shortcut: Arc<Mutex<String>>,   // "F9", "Ctrl+R", etc.
-    pub cancel_shortcut: Arc<Mutex<String>>,   // "Escape", "Ctrl+Q", etc.
-}
-```
-
-**Dynamic Re-registration:**
-```rust
-#[tauri::command]
-async fn save_shortcuts(
-    shortcuts: std::collections::HashMap<String, String>,
-    app: AppHandle,
-    state: State<'_, AppState>
-) -> Result<(), String> {
-    if let Some(toggle) = shortcuts.get("toggle") {
-        let old_shortcut = state.toggle_shortcut.lock().await.clone();
-        *state.toggle_shortcut.lock().await = toggle.clone();
-
-        // Unregister old shortcut
-        if let Some(old_sc) = parse_shortcut(&old_shortcut) {
-            let _ = app.global_shortcut().unregister(old_sc);
-        }
-
-        // Register new shortcut
-        if let Some(new_sc) = parse_shortcut(toggle) {
-            app.global_shortcut().register(new_sc)?;
-        }
-    }
-    // Same for cancel shortcut...
-    Ok(())
-}
-```
-
-**Shortcut Handler:**
-```rust
-.with_handler(move |_app, shortcut, event| {
-    if event.state == ShortcutState::Pressed {
-        let shortcut_str = format!("{:?}", shortcut);
-
-        // Dynamically check which shortcut was pressed
-        let state: tauri::State<AppState> = app_clone.state();
-        let toggle_sc = state.toggle_shortcut.lock().await.clone();
-        let cancel_sc = state.cancel_shortcut.lock().await.clone();
-
-        if let Some(parsed_toggle) = parse_shortcut(&toggle_sc) {
-            if format!("{:?}", parsed_toggle) == shortcut_str {
-                // Handle toggle
-            }
-        }
-        if let Some(parsed_cancel) = parse_shortcut(&cancel_sc) {
-            if format!("{:?}", parsed_cancel) == shortcut_str {
-                // Handle cancel
-            }
-        }
-    }
-})
-```
-
-**Supported Keys:**
-- Function keys: F1-F12
-- Special keys: Escape, Space, Tab, Enter, Backspace, Delete, Home, End, PageUp, PageDown
-- Arrow keys: ArrowUp, ArrowDown, ArrowLeft, ArrowRight
-- Letters: A-Z
-- Numbers: 0-9
-- Symbols: `\`, `/`, `;`, `'`, `[`, `]`, `,`, `.`, `` ` ``, `-`, `=`
-- Modifiers: Ctrl, Alt, Shift, Win/Super
-
-**Example Shortcuts:**
-- `F9` - Just F9 key
-- `Ctrl+Shift+R` - Control + Shift + R
-- `Alt+\` - Alt + Backslash
-- `Ctrl+Q` - Control + Q
-
-### 12. Theme Support
-
-**Problem:** Users want to customize appearance and reduce eye strain.
-
-**Solution:** Light, Dark, and System themes using CSS variables.
-
-**Implementation:**
-
-**CSS Variables:**
-```css
-:root {
-    --bg-main: #ffffff;
-    --bg-sidebar: #f8f9fa;
-    --bg-card: #ffffff;
-    --text-primary: #1a1a1a;
-    --text-secondary: #6b7280;
-    --border-color: #e5e7eb;
-    --accent-color: #3b82f6;
-}
-
-[data-theme="dark"] {
-    --bg-main: #1a1a1a;
-    --bg-sidebar: #111111;
-    --bg-card: #2a2a2a;
-    --text-primary: #ffffff;
-    --text-secondary: #9ca3af;
-    --border-color: #374151;
-    --accent-color: #60a5fa;
-}
-
-body {
-    background-color: var(--bg-main);
-    color: var(--text-primary);
-}
-```
-
-**JavaScript:**
-```javascript
-function applyTheme(theme) {
-    if (theme === 'system') {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        theme = prefersDark ? 'dark' : 'light';
-    }
-
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-}
-
-// Listen for system theme changes
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'system') {
-        applyTheme('system');
-    }
-});
-```
-
-**Features:**
-- Three modes: Light, Dark, System
-- System mode follows OS preference
-- Dynamically updates if OS theme changes
-- Stored in localStorage
-- Applied on page load
-
----
-
-## File Structure
+### Frontend (Rust/Tauri)
+
+- **Framework:** Tauri 2.8.5
+- **UI:** HTML/CSS/JavaScript (vanilla, no framework)
+- **Platform:** Windows (x64)
+- **Key Features:**
+  - System tray integration
+  - Global hotkey handling
+  - Text injection via clipboard
+  - Settings management
+  - Recording window overlay
+
+### Backend (Python/FastAPI)
+
+- **Framework:** FastAPI 0.115.0+
+- **AI Engine:** faster-whisper 1.0.0+
+- **Audio:** sounddevice 0.4.6+
+- **Key Features:**
+  - Audio capture and processing
+  - Whisper model management
+  - GPU/CPU device detection
+  - Real-time transcription
+
+## 📁 Project Structure
 
 ```
 Whisper4Windows/
-├── backend/
-│   ├── main.py                 # FastAPI server with endpoints
-│   ├── whisper_engine.py       # Whisper model wrapper
-│   ├── audio_capture.py        # Microphone recording
+├── frontend/                    # Tauri frontend
+│   ├── src-tauri/              # Rust source
+│   │   ├── src/
+│   │   │   ├── lib.rs          # Main Rust code
+│   │   │   └── main.rs         # Entry point
+│   │   ├── tauri.conf.json     # Tauri configuration
+│   │   ├── Cargo.toml          # Rust dependencies
+│   │   └── binaries/           # Backend executable
+│   └── dist/                   # Built frontend
+├── backend/                     # Python backend
+│   ├── main.py                 # FastAPI server
+│   ├── whisper_engine.py       # Whisper AI engine
+│   ├── audio_capture.py        # Audio handling
+│   ├── gpu_manager.py          # GPU library management
 │   ├── requirements.txt        # Python dependencies
-│   └── venv/                   # Python virtual environment
-│       └── Lib/site-packages/
-│           ├── nvidia/
-│           │   ├── cublas/bin/ # CUDA libraries
-│           │   └── cudnn/bin/
-│
-├── frontend/
-│   ├── dist/
-│   │   ├── recording.html      # Overlay UI (616×140)
-│   │   └── index.html          # Main settings window
-│   │
-│   └── src-tauri/
-│       ├── src/
-│       │   └── lib.rs          # Main Rust logic
-│       │
-│       ├── Cargo.toml          # Rust dependencies
-│       ├── tauri.conf.json     # Tauri configuration
-│       │
-│       └── target/release/
-│           └── app.exe         # Compiled application
-│
-├── START_APP.bat               # Launch script
-├── STOP_APP.bat                # Kill all processes
-├── TEST_GPU.bat                # GPU diagnostics
-│
-├── README.md                   # User documentation
-├── TECHNICAL.md                # This file
-├── INSTALLATION.md             # Setup guide
-└── .gitignore
+│   └── build/                  # PyInstaller build
+├── images/                     # UI screenshots
+├── logo_backup/               # Original logo files
+└── scripts/                   # Build scripts
 ```
 
-### File Responsibilities
+## 🔧 Core Components
 
-**`lib.rs`**
-- Global shortcut registration (F9, Esc)
-- Window creation and positioning
+### 1. WhisperEngine (`backend/whisper_engine.py`)
+
+**Purpose:** Manages Whisper AI model loading and transcription
+
+**Key Features:**
+- Model size selection (tiny, base, small, medium, large-v3)
+- Device detection (CUDA/CPU with automatic fallback)
+- Compute type optimization (float16, int8_float16, int8)
+- CUDA library path management
+- Model caching in AppData
+
+**API:**
+```python
+class WhisperEngine:
+    def __init__(self, model_size: str, device: str, compute_type: str)
+    def load_model(self) -> bool
+    def transcribe_audio(self, audio_data: np.ndarray, language: str) -> Dict
+    def is_model_downloaded(self, model_size: str) -> bool
+```
+
+### 2. AudioCapture (`backend/audio_capture.py`)
+
+**Purpose:** Handles microphone input and audio processing
+
+**Key Features:**
+- WASAPI audio capture via sounddevice
+- Device enumeration and selection
+- Real-time audio level monitoring
+- Queue-based audio buffering
+- WAV file export
+
+**API:**
+```python
+class AudioCapture:
+    def __init__(self, sample_rate: int = 16000, channels: int = 1)
+    def start_recording(self, device_index: Optional[int] = None)
+    def stop_recording(self) -> Optional[np.ndarray]
+    def get_devices(self) -> Dict[str, List[AudioDevice]]
+    def get_audio_level(self) -> float
+```
+
+### 3. GPU Manager (`backend/gpu_manager.py`)
+
+**Purpose:** Downloads and manages CUDA/cuDNN libraries
+
+**Key Features:**
+- NVIDIA GPU detection
+- Library installation via pip
+- CUDA library verification
+- Download progress tracking
+- Automatic cleanup
+
+**API:**
+```python
+def is_gpu_available() -> bool
+def are_gpu_libs_installed() -> bool
+def install_gpu_libs(progress_callback=None) -> bool
+def get_gpu_info() -> Dict
+```
+
+### 4. Frontend State (`frontend/src-tauri/src/lib.rs`)
+
+**Purpose:** Manages application state and UI interactions
+
+**Key Features:**
+- Settings persistence
+- Global hotkey registration
 - Text injection via clipboard
-- HTTP requests to backend
-- Tray icon and menu
-- Tauri command handlers
+- Window management
+- Backend communication
 
-**`recording.html`**
-- Overlay UI layout
-- Audio level polling
-- Visualizer animation
-- Button click handlers
-- State management (isProcessing, etc.)
-- Model selector
+**State Structure:**
+```rust
+pub struct AppState {
+    pub selected_model: Arc<Mutex<String>>,
+    pub selected_device: Arc<Mutex<String>>,
+    pub selected_microphone: Arc<Mutex<Option<i32>>>,
+    pub use_clipboard: Arc<Mutex<bool>>,
+    pub selected_language: Arc<Mutex<String>>,
+    pub toggle_shortcut: Arc<Mutex<String>>,
+    pub cancel_shortcut: Arc<Mutex<String>>,
+    pub backend_child: Arc<Mutex<Option<CommandChild>>>,
+}
+```
 
-**`main.py`**
-- FastAPI endpoints
-- Request/response handling
-- Audio capture lifecycle
-- Whisper engine lifecycle
-- Audio level calculation
+## 🌐 API Endpoints
 
-**`whisper_engine.py`**
-- Model loading (lazy)
-- Device detection (CUDA vs CPU)
-- Transcription execution
-- Error handling
+### Backend API (FastAPI)
 
-**`audio_capture.py`**
-- sounddevice stream management
-- Audio queue management
-- Chunk concatenation
-- RMS level calculation
+**Base URL:** `http://127.0.0.1:8000`
 
----
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/` | GET | Health check |
+| `/health` | GET | System status |
+| `/start` | POST | Start recording |
+| `/stop` | POST | Stop and transcribe |
+| `/cancel` | POST | Cancel recording |
+| `/audio_level` | GET | Get audio input level |
+| `/devices` | GET | List audio devices |
+| `/gpu/info` | GET | GPU status |
+| `/gpu/install` | POST | Install GPU libraries |
+| `/gpu/uninstall` | POST | Remove GPU libraries |
 
-## Build & Deployment
+### Frontend Commands (Tauri)
 
-### Prerequisites
+| Command | Purpose |
+|---------|---------|
+| `cmd_start_recording` | Start recording session |
+| `cmd_stop_recording` | Stop and transcribe |
+| `cmd_cancel_recording` | Cancel recording |
+| `cmd_toggle_recording` | Toggle recording state |
+| `inject_text_directly` | Inject text via clipboard |
+| `set_model_and_device` | Update settings |
+| `set_microphone_device` | Select microphone |
+| `set_clipboard_paste` | Configure clipboard behavior |
+| `save_shortcuts` | Update keyboard shortcuts |
 
-**System:**
-- Windows 10/11
-- 8GB+ RAM
-- Microphone
+## 🎛️ Configuration
 
-**Required Software:**
-- Python 3.10+
-- Rust 1.77.2+
-- Node.js (for Tauri CLI)
-- Visual Studio Build Tools
+### Tauri Configuration (`frontend/src-tauri/tauri.conf.json`)
 
-**Optional (GPU):**
-- NVIDIA GPU (GTX 1060+)
-- CUDA Toolkit 12.6+
-- cuDNN 9.x
+```json
+{
+  "productName": "Whisper4Windows",
+  "version": "0.1.0",
+  "identifier": "com.whisper4windows.dev",
+  "app": {
+    "trayIcon": {
+      "iconPath": "icons/256x256.png",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false
+    }
+  },
+  "bundle": {
+    "externalBin": ["binaries/whisper-backend"]
+  }
+}
+```
 
-### Build Commands
+### Backend Dependencies (`backend/requirements.txt`)
 
-**Backend Setup:**
+```
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.26.0
+scipy>=1.12.0
+pydantic>=2.10.0
+```
+
+### Rust Dependencies (`frontend/src-tauri/Cargo.toml`)
+
+```toml
+[dependencies]
+tauri = { version = "2.8.5", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2.3.0"
+tauri-plugin-shell = "2"
+tauri-plugin-single-instance = "2"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1.0", features = ["full"] }
+```
+
+## 🔄 Data Flow
+
+### Recording Workflow
+
+1. **User presses F9** → Frontend calls `cmd_toggle_recording`
+2. **Frontend** → Shows recording window, calls backend `/start`
+3. **Backend** → Initializes WhisperEngine, starts AudioCapture
+4. **AudioCapture** → Captures audio in real-time, stores in queue
+5. **User presses F9 again** → Frontend calls `cmd_stop_recording`
+6. **Backend** → Stops recording, transcribes audio with WhisperEngine
+7. **Frontend** → Receives transcription, injects text via clipboard
+
+### GPU Detection Flow
+
+1. **App startup** → `setup_cuda_paths()` adds CUDA library paths
+2. **WhisperEngine init** → `_detect_device()` checks for CUDA availability
+3. **Model loading** → Tries GPU compute types, falls back to CPU if needed
+4. **Runtime** → Automatic fallback if CUDA libraries fail
+
+## 🎯 Performance Characteristics
+
+### Model Performance
+
+| Model | Size | Speed (GPU) | Speed (CPU) | Quality |
+|-------|------|-------------|-------------|---------|
+| tiny | ~150MB | 0.2-0.5s | 2-5s | Basic |
+| base | ~300MB | 0.3-0.8s | 3-8s | Good |
+| small | ~500MB | 0.5-1.5s | 5-15s | Very Good |
+| medium | ~1.5GB | 1-3s | 10-30s | Excellent |
+| large-v3 | ~3GB | 2-5s | 20-60s | Best |
+
+### Memory Usage
+
+- **Frontend:** ~50MB
+- **Backend (CPU):** ~200-500MB (depending on model)
+- **Backend (GPU):** ~1-2GB VRAM + 200-500MB RAM
+- **CUDA Libraries:** ~400MB disk space
+
+## 🛠️ Development Workflow
+
+### Running from Source
+
+```bash
+# Start backend
+cd backend
+.\venv\Scripts\Activate.ps1
+python main.py
+
+# Start frontend (separate terminal)
+cd frontend/src-tauri
+cargo tauri dev
+```
+
+### Building for Distribution
+
+```bash
+# Build everything
+BUILD_INSTALLER.bat
+
+# Or step by step
+cd backend
+python build_backend.py
+cd ../frontend/src-tauri
+cargo tauri build
+```
+
+### Testing
+
+```bash
+# Test GPU setup
+cd backend
+.\venv\Scripts\Activate.ps1
+python -c "from whisper_engine import WhisperEngine; print(WhisperEngine('small', 'auto')._detect_device())"
+
+# Test audio devices
+python -c "from audio_capture import AudioCapture; print(AudioCapture().get_devices())"
+```
+
+## 🐛 Common Issues
+
+### Backend Issues
+
+**"Module not found" errors:**
 ```bash
 cd backend
-python -m venv venv
-venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-**Frontend Build:**
+**CUDA library errors:**
+- Check GPU detection: `nvidia-smi`
+- Verify CUDA paths in `whisper_engine.py`
+- Try CPU fallback: set device to "cpu"
+
+**Audio device issues:**
+- Check microphone permissions
+- Verify device index in settings
+- Test with different sample rates
+
+### Frontend Issues
+
+**Hotkey not working:**
+- Check if app is running (system tray)
+- Verify shortcut registration in logs
+- Try different key combinations
+
+**Text injection failing:**
+- Ensure target window has focus
+- Check Windows permissions
+- Test with manual injection button
+
+**Window not showing:**
+- Check system tray for app icon
+- Verify window positioning code
+- Check for multiple instances
+
+## 📊 Logging and Debugging
+
+### Backend Logs
+
+- **Console:** Real-time output during development
+- **File:** `%APPDATA%\com.whisper4windows.dev\logs\app.log`
+
+### Frontend Logs
+
+- **Console:** Browser dev tools (F12)
+- **File:** `%APPDATA%\com.whisper4windows.dev\logs\app.log`
+
+### Debug Commands
+
 ```bash
-cd frontend
-cargo tauri build --no-bundle
-```
-
-**Output:** `frontend\src-tauri\target\release\app.exe`
-
-### Running
-
-**Option 1: Batch Script (Recommended)**
-```bash
-START_APP.bat
-```
-
-**Option 2: Manual**
-```bash
-# Terminal 1: Backend
+# Check GPU status
 cd backend
-venv\Scripts\activate
-python main.py
+python -c "import gpu_manager; print(gpu_manager.get_gpu_info())"
 
-# Terminal 2: Frontend
-frontend\src-tauri\target\release\app.exe
+# Test audio devices
+python -c "import sounddevice as sd; print(sd.query_devices())"
+
+# Verify CUDA libraries
+where.exe cublas64_12.dll
+where.exe cudnn_ops64_9.dll
 ```
 
-### Environment Variables
-
-**For GPU:**
-```batch
-set PATH=%PATH%;backend\venv\Lib\site-packages\nvidia\cublas\bin
-set PATH=%PATH%;backend\venv\Lib\site-packages\nvidia\cudnn\bin
-set PATH=%PATH%;C:\Program Files\NVIDIA\CUDNN\v9.13\bin\13.0
-```
-
----
-
-## Known Issues & Solutions
-
-### Issue 1: Text Field Loses Focus
-
-**Symptom:** Text doesn't inject after transcription.
-
-**Cause:** Window steals focus when shown.
-
-**Solution:**
-- Set `.focused(false)` on window
-- Hide window BEFORE injection
-- Wait 100ms for focus to return
-
-**Code:**
-```rust
-// Hide window FIRST
-win.hide()?;
-
-// Wait for focus to return
-tokio::time::sleep(Duration::from_millis(100)).await;
-
-// Now inject
-inject_text(text)?;
-```
-
-### Issue 2: Hotkey Triggers Twice
-
-**Symptom:** F9 press triggers start AND stop immediately.
-
-**Cause:** Handler triggered on both key press and release.
-
-**Solution:** Filter for `ShortcutState::Pressed` only.
-
-**Code:**
-```rust
-if event.state == ShortcutState::Pressed {
-    // Handle hotkey
-}
-```
-
-### Issue 3: Window Stays in Processing State
-
-**Symptom:** After recording, window still shows "Processing..." when shown again.
-
-**Cause:** State not reset between recordings.
-
-**Solution:** Auto-reset when window becomes visible.
-
-**Code:**
-```javascript
-if (isVisible && !wasVisible) {
-    resetToRecording();  // Clear processing state
-}
-```
-
-### Issue 4: Microphone Accessed When Window Hidden
-
-**Symptom:** Windows shows mic indicator even when not recording.
-
-**Cause:** WebView's `getUserMedia()` doesn't release on window hide.
-
-**Solution:** Remove WebView audio access, poll backend instead.
-
-**Code:**
-```javascript
-// DON'T: const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-
-// DO: Poll backend
-const response = await fetch('http://127.0.0.1:8000/audio_level');
-```
-
-### Issue 5: Visualizer Not Updating
-
-**Symptom:** Bars stay at minimum height during recording.
-
-**Cause:** Backend not returning audio levels.
-
-**Solution:** Ensure backend `/audio_level` endpoint implemented.
-
-**Debug:**
-```javascript
-console.log('Audio level:', data.level, 'Recording:', data.recording);
-```
-
----
-
-## Design Decisions
-
-### Why Two Processes?
-
-**Decision:** Separate frontend (Tauri/Rust) and backend (Python/FastAPI).
-
-**Rationale:**
-- Whisper only available in Python
-- Tauri provides native Windows integration
-- Allows independent updates
-- Backend can be reused by other frontends
-
-**Tradeoff:** More complex deployment, two processes to manage.
-
-### Why Clipboard + Ctrl+V?
-
-**Decision:** Inject via clipboard instead of character-by-character.
-
-**Rationale:**
-- Much faster (instant vs 0.5s per 10 chars)
-- More reliable
-- Handles Unicode better
-- Works with all apps
-
-**Tradeoff:** Overwrites user's clipboard.
-
-**Mitigation:** Could save/restore clipboard (not implemented).
-
-### Why Global Hotkeys?
-
-**Decision:** OS-level F9 and Esc, not window-level.
-
-**Rationale:**
-- Works from any app
-- Doesn't require window focus
-- Doesn't deselect text field
-
-**Tradeoff:** Can conflict with other apps using F9.
-
-**Future:** Allow custom hotkey configuration.
-
-### Why Polling for Audio Levels?
-
-**Decision:** Frontend polls GET /audio_level every 100ms.
-
-**Rationale:**
-- Simpler than WebSockets
-- Stateless
-- Easy to debug
-- Low overhead (100ms is fine for visualization)
-
-**Tradeoff:** Slight delay (max 100ms).
-
-### Why 616×140 Window?
-
-**Decision:** 22:5 aspect ratio, 616 pixels wide.
-
-**Rationale:**
-- Wide enough for 80 bars with spacing
-- Narrow enough to not obstruct screen
-- 22:5 ratio requested by user
-- 140px height fits all UI elements
-
-**Calculation:**
-- 22/5 = 4.4 ratio
-- 140 * 4.4 = 616
-
-### Why Top Center Position?
-
-**Decision:** Window at (center_x, 50px from top).
-
-**Rationale:**
-- Visible without obstructing content
-- Consistent position
-- Easy to glance at
-- Mimics macOS notification style
-
-**Alternative Considered:** Bottom right (like notifications) - rejected as too far from user's focus.
-
-### Why 80 Visualizer Bars?
-
-**Decision:** 80 bars (reduced from 100 for 1200px window).
-
-**Rationale:**
-- Fits 616px width: 80 * 3px bars + 79 * 2px gaps = 398px (leaves padding)
-- Smooth animation
-- Responsive to audio
-- Not too dense
-
-**Calculation:**
-- Bar width: 3px
-- Gap: 2px (CSS gap property)
-- Total: 80 * 3 + 79 * 2 = 398px
-- Padding: (616 - 398) / 2 = 109px per side
-
-### Why Faster-Whisper?
-
-**Decision:** Use faster-whisper instead of openai-whisper.
-
-**Rationale:**
-- 4x faster on CPU
-- 2x faster on GPU
-- Lower memory usage
-- CTranslate2 optimization
-- Compatible API
-
-**Tradeoff:** Extra dependency (ctranslate2).
-
----
-
-## Development Guidelines
-
-### For Future AI Assistants
-
-**When modifying the overlay:**
-1. Always test with START_APP.bat (not just cargo run)
-2. Check both button clicks AND F9/Esc hotkeys
-3. Verify text injection works (test in Notepad)
-4. Ensure window doesn't steal focus
-5. Check state resets between recordings
-
-**When modifying backend:**
-1. Keep /audio_level endpoint fast (<10ms)
-2. Don't block on transcription in /start
-3. Test with both CPU and GPU
-4. Return JSON, not plain text
-5. Handle missing audio gracefully
-
-**When modifying Rust:**
-1. Always `.map_err(|e| e.to_string())?` for Results
-2. Use `tokio::spawn` for async backend calls
-3. Log with `log::info!()` not `println!()`
-4. Test global shortcuts don't conflict
-5. Verify clipboard injection order
-
-**When modifying JavaScript:**
-1. Always check `isProcessing` before polling
-2. Clear intervals on window hide
-3. Reset state on window show
-4. Use try-catch for fetch calls
-5. Log to console for debugging
-
-### Common Tasks
-
-**Change hotkey:**
-```rust
-// In lib.rs
-let shortcut = Shortcut::new(None, Code::F10);  // Change F9 to F10
-```
-
-**Change window size:**
-```rust
-// In lib.rs
-.inner_size(800.0, 160.0)  // New size
-
-// In recording.html
-.container { width: 800px; }
-```
-
-**Change model:**
-```javascript
-// In recording.html
-<option value="medium" selected>Medium</option>
-```
-
-**Add new endpoint:**
-```python
-# In main.py
-@app.get("/new_endpoint")
-async def new_endpoint():
-    return {"data": "value"}
-```
-
----
-
-## Testing Checklist
-
-**Before Committing Changes:**
-
-- [ ] Build succeeds: `cargo tauri build --no-bundle`
-- [ ] Backend starts: `python main.py`
-- [ ] Frontend starts: `app.exe`
-- [ ] F9 starts recording (window shows)
-- [ ] F9 stops recording (window hides)
-- [ ] Text appears in Notepad
-- [ ] Esc cancels recording
-- [ ] Visualizer animates during recording
-- [ ] Wave animation shows during processing
-- [ ] Window positioned at top center
-- [ ] No focus stealing (text field stays selected)
-- [ ] State resets on next recording
-- [ ] Model selector works
-- [ ] GPU/CPU detection works
-- [ ] Logs visible in frontend console
-- [ ] No mic access when window hidden
-
----
-
-## Future Enhancements
-
-**High Priority:**
-- [ ] Custom hotkey configuration UI
-- [ ] Save/restore clipboard before injection
-- [ ] Multi-monitor support improvements
-- [ ] Error messages to user (not just logs)
-
-**Medium Priority:**
-- [ ] Recording history/cache
-- [ ] Post-processing options (punctuation, capitalization)
-- [ ] Language selection UI
-- [ ] Keyboard shortcut hints overlay
-
-**Low Priority:**
-- [ ] WebSocket for audio levels (instead of polling)
-- [ ] Installer/MSI package
-- [ ] Auto-update mechanism
-- [ ] Themes/customization
-
----
-
-## Glossary
-
-**WASAPI** - Windows Audio Session API, low-latency audio interface
-**RMS** - Root Mean Square, measure of audio loudness
-**Tauri** - Electron alternative using WebView2
-**faster-whisper** - Optimized Whisper using CTranslate2
-**CTranslate2** - Fast inference engine for Transformer models
-**cuDNN** - CUDA Deep Neural Network library
-**SendInput** - Windows API for keyboard/mouse simulation
-**GlobalAlloc** - Windows API for memory allocation
-**WebView2** - Microsoft Edge Chromium-based web control
-**ASGI** - Asynchronous Server Gateway Interface (Python)
-
----
-
-## Contact & Support
-
-**Repository:** (Add GitHub URL)
-**Issues:** (Add GitHub Issues URL)
-**Docs:** README.md, INSTALLATION.md, TECHNICAL.md
-
----
-
-**End of Technical Documentation**
+## 🔒 Security Considerations
+
+- **No network calls** during transcription
+- **Local processing only** - audio never leaves the device
+- **No telemetry** or data collection
+- **Open source** - all code is auditable
+- **Minimal permissions** - only microphone access required
+
+## 🚀 Future Enhancements
+
+### Planned Features
+
+- **Real-time transcription** - Live text streaming
+- **Custom models** - Support for fine-tuned Whisper models
+- **Batch processing** - Transcribe multiple audio files
+- **Export options** - Save transcriptions to files
+- **Voice commands** - Control app with voice
+- **Multi-language** - Simultaneous language detection
+
+### Technical Improvements
+
+- **WebRTC VAD** - Better voice activity detection
+- **Streaming API** - Real-time audio processing
+- **Model quantization** - Smaller model sizes
+- **Cross-platform** - Linux and macOS support
+- **Mobile apps** - iOS and Android versions
+
+## 📚 References
+
+- **Whisper Paper:** https://arxiv.org/abs/2212.04356
+- **faster-whisper:** https://github.com/guillaumekln/faster-whisper
+- **Tauri Documentation:** https://tauri.app/
+- **FastAPI Documentation:** https://fastapi.tiangolo.com/
+- **CUDA Toolkit:** https://developer.nvidia.com/cuda-toolkit

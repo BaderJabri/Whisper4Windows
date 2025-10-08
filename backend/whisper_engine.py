@@ -56,24 +56,61 @@ def setup_cuda_paths():
             gpu_libs_dir / "nvidia" / "cusparse" / "bin",
         ])
 
-    # System CUDA installation (check all versions)
-    cuda_paths.extend([
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin"),
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.7\bin"),
-        Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8\bin"),
-        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.3\bin"),
-        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.4\bin"),
-        Path(r"C:\Program Files\NVIDIA\CUDNN\v9.5\bin"),
-    ])
-
-    # Also check if CUDA is in the CUDA toolkit's nested bin
-    cuda_toolkit = Path(r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA")
-    if cuda_toolkit.exists():
-        for cuda_version_dir in cuda_toolkit.iterdir():
-            if cuda_version_dir.is_dir():
-                bin_path = cuda_version_dir / "bin"
-                if bin_path.exists():
-                    cuda_paths.append(bin_path)
+    # System CUDA installation (dynamic detection for any device)
+    # Check Program Files (x86) and Program Files directories
+    program_files_dirs = [
+        Path(os.environ.get('ProgramFiles', r'C:\Program Files')),
+        Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')),
+    ]
+    
+    for program_files in program_files_dirs:
+        if not program_files.exists():
+            continue
+            
+        # Check NVIDIA GPU Computing Toolkit
+        cuda_toolkit = program_files / "NVIDIA GPU Computing Toolkit" / "CUDA"
+        if cuda_toolkit.exists():
+            logger.info(f"🔍 Found CUDA toolkit: {cuda_toolkit}")
+            for cuda_version_dir in cuda_toolkit.iterdir():
+                if cuda_version_dir.is_dir() and cuda_version_dir.name.startswith('v'):
+                    bin_path = cuda_version_dir / "bin"
+                    if bin_path.exists():
+                        cuda_paths.append(bin_path)
+                        logger.info(f"   ✅ Added CUDA version: {cuda_version_dir.name}")
+        
+        # Check NVIDIA cuDNN (only if no bundled libraries available)
+        # Skip system cuDNN to avoid version conflicts with bundled libraries
+        bundled_cudnn_available = any(
+            (Path(sys._MEIPASS) / "nvidia" / "cudnn" / "bin").exists() if getattr(sys, 'frozen', False) else False,
+            (appdata / 'Whisper4Windows' / 'gpu_libs' / 'nvidia' / 'cudnn' / 'bin').exists()
+        )
+        
+        if not bundled_cudnn_available:
+            cudnn_dir = program_files / "NVIDIA" / "CUDNN"
+            if cudnn_dir.exists():
+                logger.info(f"🔍 Found cuDNN directory: {cudnn_dir}")
+                for cudnn_version_dir in cudnn_dir.iterdir():
+                    if cudnn_version_dir.is_dir() and cudnn_version_dir.name.startswith('v'):
+                        bin_path = cudnn_version_dir / "bin"
+                        if bin_path.exists():
+                            cuda_paths.append(bin_path)
+                            logger.info(f"   ✅ Added cuDNN version: {cudnn_version_dir.name}")
+        else:
+            logger.info("🔒 Skipping system cuDNN to avoid version conflicts with bundled libraries")
+    
+    # Also check common alternative locations
+    alternative_paths = [
+        Path(os.environ.get('CUDA_PATH', '')),
+        Path(os.environ.get('CUDA_HOME', '')),
+        Path(os.environ.get('CUDNN_PATH', '')),
+    ]
+    
+    for alt_path in alternative_paths:
+        if alt_path and alt_path.exists():
+            bin_path = alt_path / "bin"
+            if bin_path.exists():
+                cuda_paths.append(bin_path)
+                logger.info(f"✅ Found CUDA in environment variable: {alt_path}")
 
     # Add to PATH environment variable
     current_path = os.environ.get('PATH', '')

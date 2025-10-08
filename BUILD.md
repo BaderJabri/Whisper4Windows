@@ -32,11 +32,13 @@ BUILD_INSTALLER.bat
 This will:
 
 1. Build the Python backend as a standalone .exe using PyInstaller (includes bundled CUDA DLLs)
-2. Copy it to the Tauri binaries folder
+2. Copy it to the Tauri binaries folder with correct naming
 3. Build the Tauri frontend with the bundled backend
 4. Create an MSI installer (~660MB with CUDA libraries)
 
 **Output:** `frontend\src-tauri\target\release\bundle\msi\Whisper4Windows_0.1.0_x64_en-US.msi`
+
+**Note:** The backend executable must be named `whisper-backend-x86_64-pc-windows-msvc.exe` for Tauri to recognize it as a sidecar.
 
 ### Method 2: Manual Build
 

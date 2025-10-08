@@ -29,7 +29,7 @@ Complete setup guide for Whisper4Windows - from first-time installation to GPU a
 1. Clone the repository
 2. Double-click `START_APP.bat`
 3. Press **F9** to start recording (customizable in settings)
-4. Speak, then press **F9** again
+4. Speak, then press **F9** again (or **Escape** to cancel)
 5. Text appears!
 
 The app works immediately in **CPU mode** (slower but functional). GPU acceleration can be enabled for 10x speed improvement.
@@ -235,10 +235,12 @@ Two windows will open:
 
 Left-click the system tray icon to open settings:
 
-- **Model Quality:** Small (recommended for balance)
+- **Model Quality:** Small (recommended for balance) - tiny, base, small, medium, large-v3
 - **Language:** Select from 99 languages or use Auto-Detect
 - **Device:** Auto (tries GPU, falls back to CPU)
-- **Keyboard Shortcuts:** Customize toggle and cancel shortcuts
+- **Microphone:** Select specific input device or use default
+- **Keyboard Shortcuts:** Customize toggle (F9) and cancel (Escape) shortcuts
+- **Clipboard:** Keep text in clipboard or auto-restore previous content
 - **Theme:** Choose Light, Dark, or System
 
 ### **3. Test It**

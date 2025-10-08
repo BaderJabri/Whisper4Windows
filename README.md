@@ -18,7 +18,7 @@ Your voice never leaves your computer. No cloud, no API keys, no subscriptions. 
 
 ### ⚡ **Lightning Fast**
 
-With GPU acceleration, transcribe 5 seconds of speech in 0.5-2 seconds. No waiting, no buffering - just instant results. CPU fallback available for all systems.
+With GPU acceleration, transcribe 30 seconds of speech in 0.5-2 seconds. No waiting, no buffering - just instant results. CPU fallback available for all systems.
 
 ### 🎯 **Works Everywhere**
 
@@ -127,8 +127,8 @@ Watch it appear instantly! ✨
 
 **Performance:**
 
-- **GPU Mode:** 5 seconds of speech → 0.5-2 seconds transcription ⚡
-- **CPU Mode:** 5 seconds of speech → 5-15 seconds transcription
+- **GPU Mode:** 30 seconds of speech → 0.5-2 seconds transcription ⚡
+- **CPU Mode:** 30 seconds of speech → 5-10 seconds transcription
 - **Model Sizes:** tiny (fastest) → base → small (recommended) → medium → large-v3 (most accurate)
 
 📖 **[Installation guide →](INSTALLATION.md)** | **[Build your own MSI →](BUILD.md)**

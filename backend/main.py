@@ -284,7 +284,11 @@ async def start_recording(request: StartRequest):
         current_language = None if request.language in (None, "auto") else request.language
         logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
         logger.info(f"📋 Requested device: {request.device}")
-        logger.info(f"🌐 Language: {current_language or 'auto-detect'}")
+        logger.info(f"🌐 Language from request: '{request.language}' → effective: '{current_language or 'auto-detect'}'")
+        if current_language:
+            logger.info(f"   Will force transcription in: {current_language}")
+        else:
+            logger.info(f"   Will auto-detect language (Whisper decides)")
 
         # Reuse existing engine if model/device match, otherwise create new one
         if whisper_engine is not None and \

@@ -43,22 +43,67 @@ def get_gpu_libs_dir() -> Path:
 
 
 def is_gpu_available() -> bool:
-    """Check if GPU (CUDA) is available on this system"""
+    """Check if GPU (CUDA) is available on this system.
+
+    Uses multiple detection methods with fallback chain:
+    1. PowerShell Get-CimInstance (works on all modern Windows)
+    2. nvidia-smi (works if NVIDIA drivers are installed)
+    3. wmic (legacy fallback for older Windows versions)
+    """
+    import subprocess
+
+    def _check_nvidia(output: str) -> bool:
+        text = output.lower()
+        return 'nvidia' in text or 'geforce' in text or 'quadro' in text or 'rtx' in text
+
+    # Method 1: PowerShell Get-CimInstance (recommended, works on Windows 10/11)
     try:
-        # Don't import ctranslate2 here - it triggers CUDA loading
-        # Instead, check if NVIDIA GPU exists via Windows
-        import subprocess
+        result = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_VideoController).Name'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        if result.returncode == 0 and _check_nvidia(result.stdout):
+            logger.info(f"GPU detected via Get-CimInstance: {result.stdout.strip()}")
+            return True
+    except Exception as e:
+        logger.debug(f"Get-CimInstance GPU check failed: {e}")
+
+    # Method 2: nvidia-smi (works if NVIDIA drivers are installed)
+    try:
+        result = subprocess.run(
+            ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            logger.info(f"GPU detected via nvidia-smi: {result.stdout.strip()}")
+            return True
+    except Exception as e:
+        logger.debug(f"nvidia-smi GPU check failed: {e}")
+
+    # Method 3: wmic (legacy fallback, removed in Windows 11 24H2+)
+    try:
         result = subprocess.run(
             ['wmic', 'path', 'win32_VideoController', 'get', 'name'],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
         )
-        output = result.stdout.lower()
-        return 'nvidia' in output or 'geforce' in output or 'quadro' in output
+        if result.returncode == 0 and _check_nvidia(result.stdout):
+            logger.info(f"GPU detected via wmic: {result.stdout.strip()}")
+            return True
     except Exception as e:
-        logger.debug(f"GPU check failed: {e}")
-        return False
+        logger.debug(f"wmic GPU check failed: {e}")
+
+    logger.warning("No NVIDIA GPU detected by any method")
+    return False
 
 
 def check_library_status() -> Dict[str, any]:

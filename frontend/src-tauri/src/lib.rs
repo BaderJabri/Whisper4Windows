@@ -109,11 +109,25 @@ impl AppState {
             cancel_shortcut: self.cancel_shortcut.lock().await.clone(),
         };
 
-        if let Ok(json) = serde_json::to_string_pretty(&settings) {
-            if let Err(e) = fs::write(&self.settings_path, json) {
-                log::error!("❌ Failed to save settings: {}", e);
-            } else {
-                log::info!("💾 Settings saved to {:?}", self.settings_path);
+        match serde_json::to_string_pretty(&settings) {
+            Ok(json) => {
+                // Ensure parent directory exists before writing
+                if let Some(parent) = self.settings_path.parent() {
+                    if !parent.exists() {
+                        if let Err(e) = fs::create_dir_all(parent) {
+                            log::error!("❌ Failed to create settings directory {:?}: {}", parent, e);
+                            return;
+                        }
+                    }
+                }
+                if let Err(e) = fs::write(&self.settings_path, json) {
+                    log::error!("❌ Failed to save settings to {:?}: {}", self.settings_path, e);
+                } else {
+                    log::info!("💾 Settings saved to {:?} (language={})", self.settings_path, settings.selected_language);
+                }
+            }
+            Err(e) => {
+                log::error!("❌ Failed to serialize settings: {}", e);
             }
         }
     }
@@ -1097,7 +1111,7 @@ pub fn run() {
             let settings_path = app_data_dir.join("settings.json");
             log::info!("📁 Settings path: {:?}", settings_path);
 
-            let app_state = AppState::new(settings_path);
+            let app_state = AppState::new(settings_path.clone());
 
             // Load and apply saved settings
             let settings = tauri::async_runtime::block_on(async {
@@ -1110,6 +1124,14 @@ pub fn run() {
 
             log::info!("📋 Loaded settings: model={}, device={}, language={}",
                 settings.selected_model, settings.selected_device, settings.selected_language);
+
+            // Ensure settings file exists on disk (creates it on first run)
+            if !settings_path.exists() {
+                log::info!("📝 First run detected - saving default settings to disk");
+                tauri::async_runtime::block_on(async {
+                    app_state.save_settings().await;
+                });
+            }
 
             // Store state in app
             app.manage(app_state);

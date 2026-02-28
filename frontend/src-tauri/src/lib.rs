@@ -32,7 +32,16 @@ pub struct Settings {
     pub selected_language: String,
     pub toggle_shortcut: String,
     pub cancel_shortcut: String,
+    #[serde(default = "default_transcription_mode")]
+    pub transcription_mode: String,
+    #[serde(default = "default_true")]
+    pub enhanced_punctuation: bool,
+    #[serde(default)]
+    pub context_prompt: String,
 }
+
+fn default_transcription_mode() -> String { "quality".to_string() }
+fn default_true() -> bool { true }
 
 impl Default for Settings {
     fn default() -> Self {
@@ -44,6 +53,9 @@ impl Default for Settings {
             selected_language: "auto".to_string(),
             toggle_shortcut: "Ctrl+\\".to_string(),
             cancel_shortcut: "Escape".to_string(),
+            transcription_mode: default_transcription_mode(),
+            enhanced_punctuation: default_true(),
+            context_prompt: String::new(),
         }
     }
 }
@@ -53,13 +65,16 @@ impl Default for Settings {
 pub struct AppState {
     pub selected_model: Arc<Mutex<String>>,
     pub selected_device: Arc<Mutex<String>>,
-    pub selected_microphone: Arc<Mutex<Option<i32>>>,  // Microphone device index (None = default)
-    pub use_clipboard: Arc<Mutex<bool>>,  // New: whether to paste to clipboard
-    pub selected_language: Arc<Mutex<String>>,  // Selected language code
-    pub toggle_shortcut: Arc<Mutex<String>>,  // Toggle recording shortcut
-    pub cancel_shortcut: Arc<Mutex<String>>,  // Cancel recording shortcut
-    pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,  // Backend process handle
-    pub settings_path: PathBuf,  // Path to settings file
+    pub selected_microphone: Arc<Mutex<Option<i32>>>,
+    pub use_clipboard: Arc<Mutex<bool>>,
+    pub selected_language: Arc<Mutex<String>>,
+    pub toggle_shortcut: Arc<Mutex<String>>,
+    pub cancel_shortcut: Arc<Mutex<String>>,
+    pub transcription_mode: Arc<Mutex<String>>,
+    pub enhanced_punctuation: Arc<Mutex<bool>>,
+    pub context_prompt: Arc<Mutex<String>>,
+    pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,
+    pub settings_path: PathBuf,
 }
 
 impl AppState {
@@ -72,6 +87,9 @@ impl AppState {
             selected_language: Arc::new(Mutex::new("auto".to_string())),
             toggle_shortcut: Arc::new(Mutex::new("F9".to_string())),
             cancel_shortcut: Arc::new(Mutex::new("Escape".to_string())),
+            transcription_mode: Arc::new(Mutex::new(default_transcription_mode())),
+            enhanced_punctuation: Arc::new(Mutex::new(default_true())),
+            context_prompt: Arc::new(Mutex::new(String::new())),
             backend_child: Arc::new(Mutex::new(None)),
             settings_path,
         }
@@ -107,6 +125,9 @@ impl AppState {
             selected_language: self.selected_language.lock().await.clone(),
             toggle_shortcut: self.toggle_shortcut.lock().await.clone(),
             cancel_shortcut: self.cancel_shortcut.lock().await.clone(),
+            transcription_mode: self.transcription_mode.lock().await.clone(),
+            enhanced_punctuation: *self.enhanced_punctuation.lock().await,
+            context_prompt: self.context_prompt.lock().await.clone(),
         };
 
         match serde_json::to_string_pretty(&settings) {
@@ -140,6 +161,9 @@ impl AppState {
         *self.selected_language.lock().await = settings.selected_language;
         *self.toggle_shortcut.lock().await = settings.toggle_shortcut;
         *self.cancel_shortcut.lock().await = settings.cancel_shortcut;
+        *self.transcription_mode.lock().await = settings.transcription_mode;
+        *self.enhanced_punctuation.lock().await = settings.enhanced_punctuation;
+        *self.context_prompt.lock().await = settings.context_prompt;
     }
 }
 
@@ -315,6 +339,9 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
     let device = state.selected_device.lock().await.clone();
     let microphone = state.selected_microphone.lock().await.clone();
     let language = state.selected_language.lock().await.clone();
+    let transcription_mode = state.transcription_mode.lock().await.clone();
+    let enhanced_punctuation = *state.enhanced_punctuation.lock().await;
+    let context_prompt = state.context_prompt.lock().await.clone();
 
     // Position window at top center and show
     if let Some(win) = app.get_webview_window("recording") {
@@ -351,7 +378,10 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
         let mut request_body = serde_json::json!({
             "model_size": model,
             "language": lang_value,
-            "device": device
+            "device": device,
+            "transcription_mode": transcription_mode,
+            "enhanced_punctuation": enhanced_punctuation,
+            "context_prompt": context_prompt
         });
 
         // Add device_index if a specific microphone is selected
@@ -618,6 +648,45 @@ async fn set_language(language: String, state: State<'_, AppState>) -> Result<()
 #[tauri::command]
 async fn get_language(state: State<'_, AppState>) -> Result<String, String> {
     Ok(state.selected_language.lock().await.clone())
+}
+
+#[tauri::command]
+async fn set_transcription_mode(mode: String, state: State<'_, AppState>) -> Result<(), String> {
+    *state.transcription_mode.lock().await = mode.clone();
+    log::info!("⚙️ Transcription mode set to: {}", mode);
+    state.save_settings().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_transcription_mode(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.transcription_mode.lock().await.clone())
+}
+
+#[tauri::command]
+async fn set_enhanced_punctuation(enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+    *state.enhanced_punctuation.lock().await = enabled;
+    log::info!("⚙️ Enhanced punctuation set to: {}", enabled);
+    state.save_settings().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_enhanced_punctuation(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(*state.enhanced_punctuation.lock().await)
+}
+
+#[tauri::command]
+async fn set_context_prompt(prompt: String, state: State<'_, AppState>) -> Result<(), String> {
+    *state.context_prompt.lock().await = prompt.clone();
+    log::info!("⚙️ Context prompt set (length: {})", prompt.len());
+    state.save_settings().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_context_prompt(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.context_prompt.lock().await.clone())
 }
 
 // Helper function to parse shortcut string to Shortcut object
@@ -1336,6 +1405,12 @@ pub fn run() {
             get_clipboard_paste,
             set_language,
             get_language,
+            set_transcription_mode,
+            get_transcription_mode,
+            set_enhanced_punctuation,
+            get_enhanced_punctuation,
+            set_context_prompt,
+            get_context_prompt,
             save_shortcuts,
             get_toggle_shortcut,
             get_cancel_shortcut,

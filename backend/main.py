@@ -105,7 +105,7 @@ async def lifespan(app: FastAPI):
     if is_recording and audio_capture:
         try:
             audio_capture.stop_recording()
-        except:
+        except Exception:
             pass
 
 
@@ -349,7 +349,7 @@ async def start_recording(request: StartRequest):
         if audio_capture:
             try:
                 audio_capture.stop_recording()
-            except:
+            except Exception:
                 pass
         
         return {"status": "error", "message": str(e)}
@@ -508,44 +508,11 @@ async def get_audio_level():
         if not is_recording or not audio_capture:
             return {"level": 0.0, "recording": False}
 
-        # Peek at recent audio without removing from queue
-        if audio_capture.audio_queue.empty():
-            return {"level": 0.0, "recording": True}
-
-        # Get queue size to know how much audio we have
-        queue_size = audio_capture.audio_queue.qsize()
-
-        # Sample a few recent chunks to calculate level
-        chunks = []
-        temp_chunks = []
-
-        # Get up to 5 most recent chunks
-        for _ in range(min(5, queue_size)):
-            try:
-                chunk = audio_capture.audio_queue.get_nowait()
-                temp_chunks.append(chunk)
-                chunks.append(chunk)
-            except:
-                break
-
-        # Put them back in the queue
-        for chunk in temp_chunks:
-            audio_capture.audio_queue.put(chunk)
-
-        if not chunks:
-            return {"level": 0.0, "recording": True}
-
-        # Calculate RMS level
-        audio_data = np.concatenate(chunks, axis=0)
-        rms = np.sqrt(np.mean(audio_data ** 2))
-
-        # Normalize to 0-1 range (typical speech is around 0.1-0.3 RMS)
-        normalized_level = min(1.0, rms * 3.0)
-
+        # Read level directly from callback-updated field (no queue touching)
         return {
-            "level": float(normalized_level),
+            "level": float(audio_capture.last_audio_level),
             "recording": True,
-            "queue_size": queue_size
+            "queue_size": audio_capture.audio_queue.qsize()
         }
 
     except Exception as e:

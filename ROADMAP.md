@@ -32,11 +32,11 @@ Il backend a volte va offline per crash del processo Python (OOM, errori CUDA, e
 **Branch:** `fix/model-memory-management`
 
 ### Task
-- [ ] Aggiungere metodo `unload_model()` in `WhisperEngine` (del model, gc.collect)
-- [ ] Chiamare `unload_model()` quando si cambia modello o device in `/start`
-- [ ] Rimuovere il check `if self.is_loaded: return True` quando model_size/device diversi
-- [ ] Aggiungere metodo `_check_vram_available()` che verifica VRAM prima del caricamento CUDA
-- [ ] Se VRAM insufficiente, fallback automatico a CPU con warning nel log
+- [x] Aggiungere metodo `unload_model()` in `WhisperEngine` (del model, gc.collect)
+- [x] Chiamare `unload_model()` quando si cambia modello o device in `/start`
+- [x] Rimuovere il check `if self.is_loaded: return True` quando model_size/device diversi
+- [x] Aggiungere metodo `_check_vram_available()` che verifica VRAM prima del caricamento CUDA
+- [x] Se VRAM insufficiente, fallback automatico a CPU con warning nel log
 
 ### Verifica
 - Cambio modello nelle impostazioni libera la memoria del precedente (verificare nei log)

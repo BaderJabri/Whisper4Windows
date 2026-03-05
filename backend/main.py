@@ -9,7 +9,8 @@ from contextlib import asynccontextmanager
 from typing import Optional, Dict, List
 import numpy as np
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -34,6 +35,12 @@ last_transcribed_text = ""
 is_model_loading = False
 model_loading_info = {"model": "", "status": ""}
 current_language: Optional[str] = None  # Store language from start request
+current_transcription_mode: str = "quality"
+current_enhanced_punctuation: bool = True
+current_context_prompt: Optional[str] = None
+
+# Lock to serialize /start, /stop, /cancel — prevents state corruption from concurrent calls
+recording_lock = asyncio.Lock()
 
 
 # Pydantic models
@@ -42,6 +49,9 @@ class StartRequest(BaseModel):
     language: Optional[str] = None  # Language code or None for auto-detect
     device: str = "auto"  # auto, cpu, cuda
     device_index: Optional[int] = None  # Microphone device index (None = default)
+    transcription_mode: str = "quality"  # fast, balanced, quality
+    enhanced_punctuation: bool = True
+    context_prompt: Optional[str] = None
 
 
 class StopRequest(BaseModel):
@@ -99,7 +109,7 @@ async def lifespan(app: FastAPI):
     if is_recording and audio_capture:
         try:
             audio_capture.stop_recording()
-        except:
+        except Exception:
             pass
 
 
@@ -119,6 +129,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions — log and return 500 instead of crashing"""
+    import traceback
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": f"Internal server error: {type(exc).__name__}"}
+    )
+
+
+# Transcription timeout (seconds)
+TRANSCRIPTION_TIMEOUT = 300
 
 
 # Endpoints
@@ -216,10 +242,12 @@ async def load_model(request: StartRequest):
                 "device": whisper_engine.device
             }
 
-        # Create new engine if needed
+        # Create new engine if needed — unload previous model first to free memory
         if whisper_engine is None or \
            whisper_engine.model_size != request.model_size or \
            whisper_engine._original_device != request.device:
+            if whisper_engine is not None:
+                whisper_engine.unload_model()
             whisper_engine = WhisperEngine(
                 model_size=request.model_size,
                 device=request.device
@@ -274,175 +302,208 @@ async def load_model(request: StartRequest):
 async def start_recording(request: StartRequest):
     """Start recording audio (no transcription until stop)"""
     global audio_capture, whisper_engine, is_recording, current_language
+    global current_transcription_mode, current_enhanced_punctuation, current_context_prompt
 
-    try:
-        if is_recording:
-            return {"status": "error", "message": "Already recording"}
+    async with recording_lock:
+        try:
+            if is_recording:
+                return {"status": "error", "message": "Already recording"}
 
-        # Store language for use in /stop
-        # Convert "auto" string to None for Whisper's auto-detection
-        current_language = None if request.language in (None, "auto") else request.language
-        logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
-        logger.info(f"📋 Requested device: {request.device}")
-        logger.info(f"🌐 Language: {current_language or 'auto-detect'}")
+            # Store language for use in /stop
+            # Convert "auto" string to None for Whisper's auto-detection
+            current_language = None if request.language in (None, "auto") else request.language
 
-        # Reuse existing engine if model/device match, otherwise create new one
-        if whisper_engine is not None and \
-           whisper_engine.model_size == request.model_size and \
-           whisper_engine._original_device == request.device:
-            logger.info(f"♻️ Reusing existing Whisper engine (device: {whisper_engine.device})")
-        else:
-            # Initialize new Whisper engine (model will load on transcription)
-            whisper_engine = WhisperEngine(
-                model_size=request.model_size,
-                device=request.device
-            )
-            logger.info(f"✓ Whisper engine created (device: {whisper_engine.device})")
-        
-        # Initialize audio capture
-        audio_capture = AudioCapture()
-        audio_capture.clear_queue()
+            # Store transcription quality settings for use in /stop
+            current_transcription_mode = request.transcription_mode
+            current_enhanced_punctuation = request.enhanced_punctuation
+            current_context_prompt = request.context_prompt if request.context_prompt else None
+            logger.info(f"🎙️ Starting recording (will transcribe on STOP)")
+            logger.info(f"📋 Requested device: {request.device}")
+            logger.info(f"🌐 Language from request: '{request.language}' → effective: '{current_language or 'auto-detect'}'")
+            if current_language:
+                logger.info(f"   Will force transcription in: {current_language}")
+            else:
+                logger.info(f"   Will auto-detect language (Whisper decides)")
 
-        # Start audio stream with selected device
-        device_index = request.device_index if request.device_index is not None else None
-        if device_index is not None:
-            logger.info(f"🎤 Using microphone device index: {device_index}")
-        else:
-            logger.info(f"🎤 Using default microphone device")
+            # Reuse existing engine if model/device match, otherwise create new one
+            if whisper_engine is not None and \
+               whisper_engine.model_size == request.model_size and \
+               whisper_engine._original_device == request.device:
+                logger.info(f"♻️ Reusing existing Whisper engine (device: {whisper_engine.device})")
+            else:
+                # Unload previous model to free memory before creating new engine
+                if whisper_engine is not None:
+                    whisper_engine.unload_model()
+                whisper_engine = WhisperEngine(
+                    model_size=request.model_size,
+                    device=request.device
+                )
+                logger.info(f"✓ Whisper engine created (device: {whisper_engine.device})")
 
-        audio_capture.start_recording(device_index=device_index)
-        await asyncio.sleep(0.1)
-        
-        is_recording = True
-        
-        logger.info("✅ Recording started! Speak now...")
-        
-        return {
-            "status": "started",
-            "message": "Recording... Press Alt+T when done",
-            "model": request.model_size,
-            "device": whisper_engine.device
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to start recording: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        
-        is_recording = False
-        if audio_capture:
-            try:
-                audio_capture.stop_recording()
-            except:
-                pass
-        
-        return {"status": "error", "message": str(e)}
+            # Initialize audio capture
+            audio_capture = AudioCapture()
+            audio_capture.clear_queue()
+
+            # Start audio stream with selected device
+            device_index = request.device_index if request.device_index is not None else None
+            if device_index is not None:
+                logger.info(f"🎤 Using microphone device index: {device_index}")
+            else:
+                logger.info(f"🎤 Using default microphone device")
+
+            audio_capture.start_recording(device_index=device_index)
+            await asyncio.sleep(0.1)
+
+            is_recording = True
+
+            logger.info("✅ Recording started! Speak now...")
+
+            return {
+                "status": "started",
+                "message": "Recording... Press Alt+T when done",
+                "model": request.model_size,
+                "device": whisper_engine.device
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Failed to start recording: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+            is_recording = False
+            if audio_capture:
+                try:
+                    audio_capture.stop_recording()
+                except Exception:
+                    pass
+
+            return {"status": "error", "message": str(e)}
 
 
 @app.post("/stop")
 async def stop_recording():
     """Stop recording and transcribe everything"""
     global is_recording, audio_capture, whisper_engine
-    
-    try:
-        if not is_recording:
-            return {"status": "error", "message": "Not recording"}
-        
-        logger.info("🛑 Stopping recording and transcribing...")
-        
-        # Stop recording flag first
-        is_recording = False
-        
-        # Stop audio capture and get ALL audio
-        loop = asyncio.get_event_loop()
-        audio_data = await loop.run_in_executor(None, audio_capture.stop_recording)
-        
-        if audio_data is None or len(audio_data) == 0:
-            logger.warning("No audio captured")
+
+    async with recording_lock:
+        try:
+            if not is_recording:
+                return {"status": "error", "message": "Not recording"}
+
+            logger.info("🛑 Stopping recording and transcribing...")
+
+            # Stop recording flag first
+            is_recording = False
+
+            # Stop audio capture and get ALL audio
+            loop = asyncio.get_event_loop()
+            audio_data = await loop.run_in_executor(None, audio_capture.stop_recording)
+
+            if audio_data is None or len(audio_data) == 0:
+                logger.warning("No audio captured")
+                return {
+                    "status": "success",
+                    "text": "",
+                    "message": "No audio recorded"
+                }
+
+            logger.info(f"📼 Captured {len(audio_data) / 16000:.1f} seconds of audio")
+
+            # Load model if not loaded
+            if not whisper_engine.is_loaded:
+                global is_model_loading, model_loading_info
+
+                is_model_loading = True
+                model_loading_info = {
+                    "model": whisper_engine.model_size,
+                    "status": "Downloading model..." if not whisper_engine.is_model_downloaded() else "Loading model..."
+                }
+
+                logger.info("📥 Loading Whisper model...")
+                try:
+                    success = whisper_engine.load_model()
+                    if not success:
+                        is_model_loading = False
+                        return {"status": "error", "message": "Failed to load Whisper model"}
+                finally:
+                    is_model_loading = False
+                    model_loading_info = {"model": "", "status": ""}
+
+            # Transcribe ALL audio at once with timing and timeout
+            import time
+            logger.info("🎙️ Transcribing full recording...")
+            logger.info(f"   Language setting: {current_language if current_language else 'auto-detect'}")
+
+            # Determine task and language for Whisper:
+            # - If English selected: translate any language TO English (language=None, task="translate")
+            # - Otherwise: transcribe in specified/detected language (language=current_language, task="transcribe")
+            if current_language == "en":
+                task = "translate"
+                whisper_language = None  # Auto-detect source language, translate to English
+                logger.info(f"   Task: translate to English (auto-detect source)")
+            else:
+                task = "transcribe"
+                whisper_language = current_language  # None for auto-detect, or specific language code
+                logger.info(f"   Task: transcribe in {whisper_language if whisper_language else 'detected language'}")
+
+            transcription_start = time.time()
+            logger.info(f"   Transcription mode: {current_transcription_mode}")
+            logger.info(f"   Enhanced punctuation: {current_enhanced_punctuation}")
+            logger.info(f"   Context prompt: {'set (' + str(len(current_context_prompt)) + ' chars)' if current_context_prompt else 'none'}")
+
+            # Wrap transcription in timeout to prevent infinite hangs
+            try:
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: whisper_engine.transcribe_audio(
+                            audio_data,
+                            language=whisper_language,
+                            task=task,
+                            transcription_mode=current_transcription_mode,
+                            enhanced_punctuation=current_enhanced_punctuation,
+                            context_prompt=current_context_prompt,
+                        )
+                    ),
+                    timeout=TRANSCRIPTION_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                audio_duration = len(audio_data) / 16000
+                logger.error(f"⏱️ Transcription timed out after {TRANSCRIPTION_TIMEOUT}s (audio was {audio_duration:.1f}s)")
+                return {
+                    "status": "error",
+                    "message": f"Transcription timed out after {TRANSCRIPTION_TIMEOUT} seconds. Try a shorter recording or a smaller model."
+                }
+
+            transcription_time = time.time() - transcription_start
+            logger.info(f"⏱️ Transcription took: {transcription_time:.2f} seconds")
+
+            if not result["success"]:
+                logger.error(f"Transcription failed: {result.get('error')}")
+                return {
+                    "status": "error",
+                    "message": result.get('error', 'Transcription failed')
+                }
+
+            final_text = result["text"].strip()
+            logger.info(f"✅ Transcription complete!")
+            logger.info(f"📝 Final text: {final_text[:100]}..." if len(final_text) > 100 else f"📝 Final text: {final_text}")
+
             return {
                 "status": "success",
-                "text": "",
-                "message": "No audio recorded"
-            }
-        
-        logger.info(f"📼 Captured {len(audio_data) / 16000:.1f} seconds of audio")
-
-        # Load model if not loaded
-        if not whisper_engine.is_loaded:
-            global is_model_loading, model_loading_info
-
-            is_model_loading = True
-            model_loading_info = {
+                "text": final_text,
+                "language": result.get("language", "en"),
+                "duration": len(audio_data) / 16000,
+                "transcription_time": transcription_time,
                 "model": whisper_engine.model_size,
-                "status": "Downloading model..." if not whisper_engine.is_model_downloaded() else "Loading model..."
+                "device": whisper_engine.device  # Return actual device used
             }
 
-            logger.info("📥 Loading Whisper model...")
-            try:
-                success = whisper_engine.load_model()
-                if not success:
-                    is_model_loading = False
-                    return {"status": "error", "message": "Failed to load Whisper model"}
-            finally:
-                is_model_loading = False
-                model_loading_info = {"model": "", "status": ""}
-        
-        # Transcribe ALL audio at once with timing
-        import time
-        logger.info("🎙️ Transcribing full recording...")
-        logger.info(f"   Language setting: {current_language if current_language else 'auto-detect'}")
-
-        # Determine task and language for Whisper:
-        # - If English selected: translate any language TO English (language=None, task="translate")
-        # - Otherwise: transcribe in specified/detected language (language=current_language, task="transcribe")
-        if current_language == "en":
-            task = "translate"
-            whisper_language = None  # Auto-detect source language, translate to English
-            logger.info(f"   Task: translate to English (auto-detect source)")
-        else:
-            task = "transcribe"
-            whisper_language = current_language  # None for auto-detect, or specific language code
-            logger.info(f"   Task: transcribe in {whisper_language if whisper_language else 'detected language'}")
-
-        transcription_start = time.time()
-
-        result = await loop.run_in_executor(
-            None,
-            whisper_engine.transcribe_audio,
-            audio_data,
-            whisper_language,  # None for auto-detect, language code for specific language, or None when translating
-            task  # "translate" for English, "transcribe" for all others
-        )
-        
-        transcription_time = time.time() - transcription_start
-        logger.info(f"⏱️ Transcription took: {transcription_time:.2f} seconds")
-        
-        if not result["success"]:
-            logger.error(f"Transcription failed: {result.get('error')}")
-            return {
-                "status": "error",
-                "message": result.get('error', 'Transcription failed')
-            }
-        
-        final_text = result["text"].strip()
-        logger.info(f"✅ Transcription complete!")
-        logger.info(f"📝 Final text: {final_text[:100]}..." if len(final_text) > 100 else f"📝 Final text: {final_text}")
-        
-        return {
-            "status": "success",
-            "text": final_text,
-            "language": result.get("language", "en"),
-            "duration": len(audio_data) / 16000,
-            "transcription_time": transcription_time,
-            "model": whisper_engine.model_size,
-            "device": whisper_engine.device  # Return actual device used
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to stop/transcribe: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return {"status": "error", "message": str(e)}
+        except Exception as e:
+            logger.error(f"❌ Failed to stop/transcribe: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {"status": "error", "message": str(e)}
 
 
 @app.post("/cancel")
@@ -450,30 +511,31 @@ async def cancel_recording():
     """Cancel recording without transcribing"""
     global is_recording, audio_capture
 
-    try:
-        if not is_recording:
-            return {"status": "error", "message": "Not recording"}
+    async with recording_lock:
+        try:
+            if not is_recording:
+                return {"status": "error", "message": "Not recording"}
 
-        logger.info("❌ Canceling recording...")
+            logger.info("❌ Canceling recording...")
 
-        # Stop recording flag
-        is_recording = False
+            # Stop recording flag
+            is_recording = False
 
-        # Stop audio capture without transcribing
-        if audio_capture:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, audio_capture.stop_recording)
+            # Stop audio capture without transcribing
+            if audio_capture:
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, audio_capture.stop_recording)
 
-        logger.info("✅ Recording canceled")
+            logger.info("✅ Recording canceled")
 
-        return {
-            "status": "success",
-            "message": "Recording canceled"
-        }
+            return {
+                "status": "success",
+                "message": "Recording canceled"
+            }
 
-    except Exception as e:
-        logger.error(f"❌ Failed to cancel: {e}")
-        return {"status": "error", "message": str(e)}
+        except Exception as e:
+            logger.error(f"❌ Failed to cancel: {e}")
+            return {"status": "error", "message": str(e)}
 
 
 @app.get("/audio_level")
@@ -485,44 +547,11 @@ async def get_audio_level():
         if not is_recording or not audio_capture:
             return {"level": 0.0, "recording": False}
 
-        # Peek at recent audio without removing from queue
-        if audio_capture.audio_queue.empty():
-            return {"level": 0.0, "recording": True}
-
-        # Get queue size to know how much audio we have
-        queue_size = audio_capture.audio_queue.qsize()
-
-        # Sample a few recent chunks to calculate level
-        chunks = []
-        temp_chunks = []
-
-        # Get up to 5 most recent chunks
-        for _ in range(min(5, queue_size)):
-            try:
-                chunk = audio_capture.audio_queue.get_nowait()
-                temp_chunks.append(chunk)
-                chunks.append(chunk)
-            except:
-                break
-
-        # Put them back in the queue
-        for chunk in temp_chunks:
-            audio_capture.audio_queue.put(chunk)
-
-        if not chunks:
-            return {"level": 0.0, "recording": True}
-
-        # Calculate RMS level
-        audio_data = np.concatenate(chunks, axis=0)
-        rms = np.sqrt(np.mean(audio_data ** 2))
-
-        # Normalize to 0-1 range (typical speech is around 0.1-0.3 RMS)
-        normalized_level = min(1.0, rms * 3.0)
-
+        # Read level directly from callback-updated field (no queue touching)
         return {
-            "level": float(normalized_level),
+            "level": float(audio_capture.last_audio_level),
             "recording": True,
-            "queue_size": queue_size
+            "queue_size": audio_capture.audio_queue.qsize()
         }
 
     except Exception as e:

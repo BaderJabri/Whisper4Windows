@@ -41,7 +41,8 @@ class AudioCapture:
         self.sample_rate = sample_rate
         self.channels = channels
         self._is_recording = False
-        self.audio_queue = queue.Queue()
+        self.audio_queue = queue.Queue(maxsize=9600)  # ~10 min of audio at 16kHz
+        self.last_audio_level = 0.0  # Updated by callback, used by /audio_level
         self.stream = None
     
     def is_recording(self) -> bool:
@@ -99,16 +100,29 @@ class AudioCapture:
     def _audio_callback(self, indata, frames, time_info, status):
         """Callback for audio stream"""
         if status:
-            logger.warning(f"⚠️ Audio callback status: {status}")
-        
+            logger.warning(f"Audio callback status: {status}")
+
         try:
-            # Put audio data in queue
-            self.audio_queue.put(indata.copy())
+            data = indata.copy()
+
+            # Update audio level for /audio_level endpoint
+            rms = float(np.sqrt(np.mean(data ** 2)))
+            self.last_audio_level = min(1.0, rms * 3.0)
+
+            # Circular buffer: drop oldest chunk if queue is full
+            if self.audio_queue.full():
+                try:
+                    self.audio_queue.get_nowait()
+                except queue.Empty:
+                    pass
+
+            self.audio_queue.put_nowait(data)
+
             # Log occasionally to confirm audio is flowing
-            if self.audio_queue.qsize() % 10 == 0:
-                logger.info(f"📊 Audio queue size: {self.audio_queue.qsize()}")
+            if self.audio_queue.qsize() % 100 == 0:
+                logger.info(f"Audio queue size: {self.audio_queue.qsize()}")
         except Exception as e:
-            logger.error(f"❌ Audio callback error: {e}")
+            logger.error(f"Audio callback error: {e}")
     
     def start_recording(self, device_index: Optional[int] = None, duration: Optional[float] = None):
         """

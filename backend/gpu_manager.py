@@ -43,22 +43,67 @@ def get_gpu_libs_dir() -> Path:
 
 
 def is_gpu_available() -> bool:
-    """Check if GPU (CUDA) is available on this system"""
+    """Check if GPU (CUDA) is available on this system.
+
+    Uses multiple detection methods with fallback chain:
+    1. PowerShell Get-CimInstance (works on all modern Windows)
+    2. nvidia-smi (works if NVIDIA drivers are installed)
+    3. wmic (legacy fallback for older Windows versions)
+    """
+    import subprocess
+
+    def _check_nvidia(output: str) -> bool:
+        text = output.lower()
+        return 'nvidia' in text or 'geforce' in text or 'quadro' in text or 'rtx' in text
+
+    # Method 1: PowerShell Get-CimInstance (recommended, works on Windows 10/11)
     try:
-        # Don't import ctranslate2 here - it triggers CUDA loading
-        # Instead, check if NVIDIA GPU exists via Windows
-        import subprocess
+        result = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             '(Get-CimInstance Win32_VideoController).Name'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        if result.returncode == 0 and _check_nvidia(result.stdout):
+            logger.info(f"GPU detected via Get-CimInstance: {result.stdout.strip()}")
+            return True
+    except Exception as e:
+        logger.debug(f"Get-CimInstance GPU check failed: {e}")
+
+    # Method 2: nvidia-smi (works if NVIDIA drivers are installed)
+    try:
+        result = subprocess.run(
+            ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            logger.info(f"GPU detected via nvidia-smi: {result.stdout.strip()}")
+            return True
+    except Exception as e:
+        logger.debug(f"nvidia-smi GPU check failed: {e}")
+
+    # Method 3: wmic (legacy fallback, removed in Windows 11 24H2+)
+    try:
         result = subprocess.run(
             ['wmic', 'path', 'win32_VideoController', 'get', 'name'],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
         )
-        output = result.stdout.lower()
-        return 'nvidia' in output or 'geforce' in output or 'quadro' in output
+        if result.returncode == 0 and _check_nvidia(result.stdout):
+            logger.info(f"GPU detected via wmic: {result.stdout.strip()}")
+            return True
     except Exception as e:
-        logger.debug(f"GPU check failed: {e}")
-        return False
+        logger.debug(f"wmic GPU check failed: {e}")
+
+    logger.warning("No NVIDIA GPU detected by any method")
+    return False
 
 
 def check_library_status() -> Dict[str, any]:
@@ -147,9 +192,107 @@ def get_download_size() -> int:
     return 700 * 1024 * 1024  # ~700MB
 
 
+def _get_wheel_url(pypi_json_url: str, package_name: str) -> Optional[str]:
+    """Query PyPI JSON API to find the Windows x86_64 wheel download URL.
+
+    Args:
+        pypi_json_url: PyPI JSON API endpoint (e.g. https://pypi.org/pypi/nvidia-cublas-cu12/json)
+        package_name: Package name for logging
+
+    Returns:
+        Download URL for the .whl file, or None if not found
+    """
+    import json
+
+    try:
+        logger.info(f"🔍 Querying PyPI for {package_name}...")
+        req = urllib.request.Request(pypi_json_url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as response:
+            data = json.loads(response.read().decode())
+
+        # Get the latest version's files
+        latest_version = data.get("info", {}).get("version", "")
+        releases = data.get("releases", {})
+        files = releases.get(latest_version, [])
+
+        if not files:
+            # Fallback: try urls from the root level
+            files = data.get("urls", [])
+
+        # Find the Windows x86_64 wheel
+        for file_info in files:
+            filename = file_info.get("filename", "")
+            if filename.endswith(".whl") and ("win_amd64" in filename or "win64" in filename):
+                url = file_info.get("url", "")
+                size_mb = file_info.get("size", 0) / (1024 * 1024)
+                logger.info(f"   Found: {filename} ({size_mb:.1f} MB)")
+                return url
+
+        # If no platform-specific wheel, try any wheel (some packages are pure Python)
+        for file_info in files:
+            filename = file_info.get("filename", "")
+            if filename.endswith(".whl") and "any" in filename:
+                url = file_info.get("url", "")
+                logger.info(f"   Found (universal): {filename}")
+                return url
+
+        logger.error(f"❌ No Windows wheel found for {package_name} v{latest_version}")
+        return None
+
+    except Exception as e:
+        logger.error(f"❌ Failed to query PyPI for {package_name}: {e}")
+        return None
+
+
+def _download_file(url: str, dest: Path, progress_callback=None, progress_label: str = "") -> bool:
+    """Download a file from URL to dest with optional progress reporting.
+
+    Args:
+        url: URL to download
+        dest: Destination file path
+        progress_callback: Optional callback function(percent, message)
+        progress_label: Label to show in progress messages
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Whisper4Windows/1.0"})
+        with urllib.request.urlopen(req, timeout=600) as response:
+            total_size = int(response.headers.get("Content-Length", 0))
+            downloaded = 0
+            chunk_size = 256 * 1024  # 256 KB chunks
+
+            with open(dest, "wb") as f:
+                while True:
+                    chunk = response.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+
+                    if total_size > 0 and progress_callback and progress_label:
+                        mb_done = downloaded / (1024 * 1024)
+                        mb_total = total_size / (1024 * 1024)
+                        logger.debug(f"   {progress_label}: {mb_done:.1f}/{mb_total:.1f} MB")
+
+        logger.info(f"   ✅ Downloaded {dest.name} ({downloaded / (1024 * 1024):.1f} MB)")
+        return True
+
+    except Exception as e:
+        logger.error(f"   ❌ Download failed: {e}")
+        if dest.exists():
+            dest.unlink()
+        return False
+
+
 def install_gpu_libs(progress_callback=None) -> bool:
     """
-    Download and install GPU libraries using pip
+    Download and install GPU libraries directly from PyPI.
+
+    Downloads NVIDIA CUDA wheel packages (.whl) via HTTP, extracts the DLLs,
+    and places them in the gpu_libs directory. Does NOT require pip or Python
+    to be installed on the system — works from within a PyInstaller bundle.
 
     Args:
         progress_callback: Optional callback function(percent, message)
@@ -174,86 +317,59 @@ def install_gpu_libs(progress_callback=None) -> bool:
         if progress_callback:
             progress_callback(5, "Preparing installation...")
 
-        # Create temporary directory for pip downloads
+        # Create temporary directory for downloads
         temp_dir = gpu_dir / "temp"
         temp_dir.mkdir(exist_ok=True)
 
         try:
-            # Use pip to download packages
-            import subprocess
-
-            # Find pip executable - prefer system Python's pip over bundled app
-            pip_cmd = None
-
-            # Try to find pip in common locations
-            pip_locations = [
-                "pip",  # PATH
-                sys.executable.replace(".exe", "") + "-m pip" if not getattr(sys, 'frozen', False) else None,
-                "python -m pip",  # Fallback to python -m pip
-                "py -m pip",  # Windows Python Launcher
-            ]
-
-            for pip_test in pip_locations:
-                if pip_test is None:
-                    continue
-                try:
-                    test_cmd = pip_test.split() + ["--version"]
-                    result = subprocess.run(test_cmd, capture_output=True, timeout=5)
-                    if result.returncode == 0:
-                        pip_cmd = pip_test.split()
-                        logger.info(f"✅ Found pip: {pip_test}")
-                        break
-                except Exception as e:
-                    logger.debug(f"pip test failed for {pip_test}: {e}")
-                    continue
-
-            if not pip_cmd:
-                logger.error("❌ Could not find pip executable")
-                return False
-
             total_packages = len(packages_to_install)
 
-            # Install each package to its own temp directory to avoid overwrites
+            # Download and extract each package
             package_dirs = []
 
             for idx, package in enumerate(packages_to_install):
                 if progress_callback:
-                    percent = 10 + (idx * 70 // total_packages)
+                    percent = 5 + (idx * 75 // total_packages)
                     progress_callback(percent, f"Downloading {package}...")
 
-                logger.info(f"Installing {package}...")
+                logger.info(f"📥 [{idx + 1}/{total_packages}] Downloading {package}...")
 
-                # Create a separate temp directory for this package
-                package_temp = temp_dir / f"pkg_{idx}_{package.replace('-', '_')}"
-                package_temp.mkdir(exist_ok=True)
-                package_dirs.append(package_temp)
-
-                # Download package using pip with timeout (10 min for large cuDNN download)
-                cmd = pip_cmd + [
-                    "install",
-                    "--target", str(package_temp),
-                    "--no-deps",
-                    "--no-warn-script-location",
-                    package
-                ]
-
-                logger.info(f"Running: {' '.join(cmd)}")
-
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=600,  # 10 minute timeout for large downloads
-                    creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
-                )
-
-                if result.returncode != 0:
-                    logger.error(f"Failed to install {package}:")
-                    logger.error(f"  stdout: {result.stdout}")
-                    logger.error(f"  stderr: {result.stderr}")
+                # Step 1: Get wheel URL from PyPI
+                pypi_url = CUDA_PACKAGES.get(package)
+                if not pypi_url:
+                    logger.error(f"❌ No PyPI URL configured for {package}")
                     return False
 
-                logger.info(f"✅ {package} installed successfully to {package_temp.name}")
+                wheel_url = _get_wheel_url(pypi_url, package)
+                if not wheel_url:
+                    logger.error(f"❌ Could not find download URL for {package}")
+                    return False
+
+                # Step 2: Download the .whl file
+                whl_filename = wheel_url.split("/")[-1].split("#")[0]
+                whl_path = temp_dir / whl_filename
+
+                if not _download_file(wheel_url, whl_path, progress_callback, package):
+                    logger.error(f"❌ Failed to download {package}")
+                    return False
+
+                # Step 3: Extract the wheel (it's a ZIP file)
+                extract_dir = temp_dir / f"pkg_{idx}_{package.replace('-', '_')}"
+                extract_dir.mkdir(exist_ok=True)
+                package_dirs.append(extract_dir)
+
+                try:
+                    with zipfile.ZipFile(whl_path, 'r') as zf:
+                        zf.extractall(extract_dir)
+                    logger.info(f"   ✅ Extracted {whl_filename}")
+                except zipfile.BadZipFile:
+                    logger.error(f"   ❌ Corrupted download for {package}")
+                    return False
+
+                # Remove the .whl file to free disk space
+                whl_path.unlink()
+
+                logger.info(f"✅ {package} downloaded and extracted")
 
             if progress_callback:
                 progress_callback(85, "Organizing libraries...")

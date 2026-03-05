@@ -74,6 +74,7 @@ pub struct AppState {
     pub enhanced_punctuation: Arc<Mutex<bool>>,
     pub context_prompt: Arc<Mutex<String>>,
     pub backend_child: Arc<Mutex<Option<tauri_plugin_shell::process::CommandChild>>>,
+    pub is_shutting_down: Arc<Mutex<bool>>,
     pub settings_path: PathBuf,
 }
 
@@ -91,6 +92,7 @@ impl AppState {
             enhanced_punctuation: Arc::new(Mutex::new(default_true())),
             context_prompt: Arc::new(Mutex::new(String::new())),
             backend_child: Arc::new(Mutex::new(None)),
+            is_shutting_down: Arc::new(Mutex::new(false)),
             settings_path,
         }
     }
@@ -1031,10 +1033,137 @@ async fn check_for_updates() -> Result<String, String> {
     Ok("No updates available".to_string())  // TODO: Implement GitHub release check
 }
 
+// Spawn backend sidecar with a watchdog that auto-restarts on unexpected termination
+fn spawn_backend_with_watchdog(app_handle: &AppHandle) {
+    use tauri_plugin_shell::ShellExt;
+
+    let sidecar_command = app_handle
+        .shell()
+        .sidecar("whisper-backend")
+        .expect("Failed to create sidecar command");
+
+    let (rx, child) = sidecar_command
+        .spawn()
+        .expect("Failed to spawn backend sidecar");
+
+    // Store child process
+    let state: tauri::State<AppState> = app_handle.state();
+    tauri::async_runtime::block_on(async {
+        *state.backend_child.lock().await = Some(child);
+    });
+
+    // Spawn watchdog task
+    let app_clone = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        watchdog_loop(app_clone, rx).await;
+    });
+}
+
+async fn watchdog_loop(
+    app_handle: AppHandle,
+    mut rx: tauri::async_runtime::Receiver<tauri_plugin_shell::process::CommandEvent>,
+) {
+    use tauri_plugin_shell::ShellExt;
+    use tauri_plugin_shell::process::CommandEvent;
+
+    let mut restart_timestamps: Vec<std::time::Instant> = Vec::new();
+
+    loop {
+        // Process events from the current backend process
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    let text = String::from_utf8_lossy(&line);
+                    // Only log non-empty lines
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        log::info!("[backend] {}", trimmed);
+                    }
+                }
+                CommandEvent::Stderr(line) => {
+                    let text = String::from_utf8_lossy(&line);
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        log::warn!("[backend:err] {}", trimmed);
+                    }
+                }
+                CommandEvent::Terminated(payload) => {
+                    let state: tauri::State<AppState> = app_handle.state();
+                    if *state.is_shutting_down.lock().await {
+                        log::info!("🛑 Backend terminated (intentional shutdown)");
+                        return;
+                    }
+                    log::warn!(
+                        "⚠️ Backend terminated unexpectedly: code={:?}, signal={:?}",
+                        payload.code, payload.signal
+                    );
+                    break; // Exit inner loop to attempt restart
+                }
+                CommandEvent::Error(e) => {
+                    log::error!("[backend:error] {}", e);
+                }
+                _ => {}
+            }
+        }
+
+        // Check shutdown flag again (could have been set while processing events)
+        let state: tauri::State<AppState> = app_handle.state();
+        if *state.is_shutting_down.lock().await {
+            log::info!("🛑 Watchdog exiting (shutdown in progress)");
+            return;
+        }
+
+        // Anti-loop: max 5 restarts in 60 seconds
+        let now = std::time::Instant::now();
+        restart_timestamps.retain(|t| now.duration_since(*t).as_secs() < 60);
+
+        if restart_timestamps.len() >= 5 {
+            log::error!("❌ Backend crashed 5 times in 60s — auto-restart disabled");
+            return;
+        }
+
+        restart_timestamps.push(now);
+
+        log::info!(
+            "🔄 Auto-restarting backend in 2s ({}/5 restarts in last 60s)...",
+            restart_timestamps.len()
+        );
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+        // Check shutdown again after waiting
+        if *state.is_shutting_down.lock().await {
+            log::info!("🛑 Watchdog exiting (shutdown during restart delay)");
+            return;
+        }
+
+        // Respawn
+        match app_handle.shell().sidecar("whisper-backend") {
+            Ok(cmd) => match cmd.spawn() {
+                Ok((new_rx, new_child)) => {
+                    *state.backend_child.lock().await = Some(new_child);
+                    rx = new_rx;
+                    log::info!("✅ Backend auto-restarted successfully");
+                }
+                Err(e) => {
+                    log::error!("❌ Failed to restart backend: {}", e);
+                    return;
+                }
+            },
+            Err(e) => {
+                log::error!("❌ Failed to create sidecar command: {}", e);
+                return;
+            }
+        }
+    }
+}
+
 // Restart backend command
 #[tauri::command]
 async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     log::info!("🔄 Restarting backend...");
+
+    // Signal shutdown so the current watchdog exits cleanly
+    *state.is_shutting_down.lock().await = true;
 
     // Kill existing backend if running
     if let Some(child) = state.backend_child.lock().await.take() {
@@ -1051,20 +1180,12 @@ async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(
         }
     }
 
-    // Start new backend
-    log::info!("🚀 Starting new backend process...");
-    use tauri_plugin_shell::ShellExt;
+    // Re-enable auto-restart for the new watchdog
+    *state.is_shutting_down.lock().await = false;
 
-    let sidecar_command = app.shell()
-        .sidecar("whisper-backend")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
-
-    let (_rx, child) = sidecar_command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn backend sidecar: {}", e))?;
-
-    // Store the new child process
-    *state.backend_child.lock().await = Some(child);
+    // Start new backend with watchdog
+    log::info!("🚀 Starting new backend process with watchdog...");
+    spawn_backend_with_watchdog(&app);
 
     // Wait for backend to start
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -1121,6 +1242,10 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             let app_clone = app.clone();
             tauri::async_runtime::spawn(async move {
                 let state: tauri::State<AppState> = app_clone.state();
+
+                // Signal intentional shutdown so watchdog doesn't restart
+                *state.is_shutting_down.lock().await = true;
+
                 if let Some(child) = state.backend_child.lock().await.take() {
                     log::info!("🛑 Killing backend process...");
                     match child.kill() {
@@ -1205,28 +1330,13 @@ pub fn run() {
             // Store state in app
             app.manage(app_state);
 
-            // Start backend sidecar
-            log::info!("🔧 Starting backend server...");
-            use tauri_plugin_shell::ShellExt;
-
-            let sidecar_command = app.app_handle()
-                .shell()
-                .sidecar("whisper-backend")
-                .expect("Failed to create sidecar command");
-
-            let (_rx, child) = sidecar_command
-                .spawn()
-                .expect("Failed to spawn backend sidecar");
-
-            // Store the child process in state so we can kill it on app exit
-            let state: tauri::State<AppState> = app.state();
-            tauri::async_runtime::block_on(async {
-                *state.backend_child.lock().await = Some(child);
-            });
+            // Start backend sidecar with auto-restart watchdog
+            log::info!("🔧 Starting backend server with watchdog...");
+            spawn_backend_with_watchdog(app.handle());
 
             // Wait a moment for backend to start
             std::thread::sleep(std::time::Duration::from_secs(1));
-            log::info!("✅ Backend server started");
+            log::info!("✅ Backend server started with watchdog");
 
             // Create recording window
             WebviewWindowBuilder::new(app, "recording", tauri::WebviewUrl::App("recording.html".into()))

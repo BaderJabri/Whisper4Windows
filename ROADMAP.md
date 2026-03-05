@@ -67,15 +67,15 @@ Il backend a volte va offline per crash del processo Python (OOM, errori CUDA, e
 **Branch:** `feat/backend-auto-restart`
 
 ### Task
-- [ ] Aggiungere `is_shutting_down: Arc<Mutex<bool>>` all'`AppState`
-- [ ] Creare funzione `spawn_backend_with_watchdog()` che:
+- [x] Aggiungere `is_shutting_down: Arc<Mutex<bool>>` all'`AppState`
+- [x] Creare funzione `spawn_backend_with_watchdog()` che:
   - Spawna il sidecar
   - Ascolta `_rx` per eventi `CommandEvent::Terminated`
   - Se non e' shutdown intenzionale, rilancia dopo 2s
   - Limita restart a max 5 in 60 secondi (anti-loop)
   - Logga stdout/stderr del backend
-- [ ] Usare questa funzione nello startup e in `restart_backend`
-- [ ] Settare `is_shutting_down = true` nel handler "quit" prima di killare
+- [x] Usare questa funzione nello startup e in `restart_backend`
+- [x] Settare `is_shutting_down = true` nel handler "quit" prima di killare
 
 ### Verifica
 - Killare manualmente il processo backend (`taskkill /F /IM whisper-backend.exe`)

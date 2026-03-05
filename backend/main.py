@@ -222,10 +222,12 @@ async def load_model(request: StartRequest):
                 "device": whisper_engine.device
             }
 
-        # Create new engine if needed
+        # Create new engine if needed — unload previous model first to free memory
         if whisper_engine is None or \
            whisper_engine.model_size != request.model_size or \
            whisper_engine._original_device != request.device:
+            if whisper_engine is not None:
+                whisper_engine.unload_model()
             whisper_engine = WhisperEngine(
                 model_size=request.model_size,
                 device=request.device
@@ -308,7 +310,9 @@ async def start_recording(request: StartRequest):
            whisper_engine._original_device == request.device:
             logger.info(f"♻️ Reusing existing Whisper engine (device: {whisper_engine.device})")
         else:
-            # Initialize new Whisper engine (model will load on transcription)
+            # Unload previous model to free memory before creating new engine
+            if whisper_engine is not None:
+                whisper_engine.unload_model()
             whisper_engine = WhisperEngine(
                 model_size=request.model_size,
                 device=request.device

@@ -3,8 +3,10 @@ Whisper Speech-to-Text Engine
 Handles model loading and transcription using faster-whisper
 """
 
+import gc
 import logging
 import os
+import subprocess
 import sys
 from typing import Optional, Dict, List
 import numpy as np
@@ -248,7 +250,79 @@ class WhisperEngine:
     def _get_cuda_compute_type_fallbacks(self) -> List[str]:
         """Get ordered list of compute types to try for CUDA, from best to worst"""
         return ["float16", "int8_float16", "int8"]
-    
+
+    def unload_model(self):
+        """Unload the current model and free memory (GPU VRAM and CPU RAM)"""
+        if self.model is not None:
+            logger.info(f"🗑️ Unloading model '{self.model_size}' from {self.device}...")
+            del self.model
+            self.model = None
+            self.is_loaded = False
+            gc.collect()
+
+            # Free CUDA memory if available
+            try:
+                import ctranslate2
+                if ctranslate2.get_cuda_device_count() > 0:
+                    import ctypes
+                    try:
+                        cudart = ctypes.CDLL("cudart64_12.dll")
+                        cudart.cudaDeviceReset()
+                        logger.info("   ✅ CUDA device memory reset")
+                    except OSError:
+                        logger.debug("   cudart64_12.dll not available for explicit reset")
+            except Exception as e:
+                logger.debug(f"   CUDA cleanup skipped: {e}")
+
+            logger.info("   ✅ Model unloaded, memory freed")
+        else:
+            logger.debug("No model to unload")
+            self.is_loaded = False
+
+    # Approximate VRAM requirements per model in MB
+    _MODEL_VRAM_MB = {
+        "tiny": 500,
+        "base": 700,
+        "small": 1500,
+        "medium": 3500,
+        "large-v3": 6500,
+        "large-v3-turbo": 4000,
+    }
+
+    def _check_vram_available(self) -> bool:
+        """Check if enough VRAM is available for the current model on CUDA.
+
+        Returns:
+            True if VRAM is sufficient (or check is inconclusive), False if clearly insufficient
+        """
+        required_mb = self._MODEL_VRAM_MB.get(self.model_size, 2000)
+
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+            )
+            if result.returncode != 0:
+                logger.warning("⚠️ nvidia-smi failed, skipping VRAM check")
+                return True  # Assume OK if we can't check
+
+            free_mb = int(result.stdout.strip().split("\n")[0])
+            logger.info(f"🔍 VRAM check: {free_mb} MB free, ~{required_mb} MB needed for '{self.model_size}'")
+
+            if free_mb < required_mb:
+                logger.warning(f"⚠️ Insufficient VRAM: {free_mb} MB free < {required_mb} MB needed")
+                return False
+
+            return True
+
+        except FileNotFoundError:
+            logger.debug("nvidia-smi not found, skipping VRAM check")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ VRAM check failed: {e}")
+            return True  # Assume OK if check fails
+
     def is_model_downloaded(self, model_size: str = None) -> bool:
         """
         Check if a model is already downloaded
@@ -297,6 +371,12 @@ class WhisperEngine:
 
             # Create models directory if it doesn't exist
             models_dir = get_models_dir()
+
+            # If using CUDA, check VRAM before attempting to load
+            if self.device == "cuda" and not self._check_vram_available():
+                logger.warning("⚠️ Insufficient VRAM — falling back to CPU")
+                self.device = "cpu"
+                self.compute_type = "int8"
 
             # If using CUDA, try compute types in order of efficiency
             if self.device == "cuda":

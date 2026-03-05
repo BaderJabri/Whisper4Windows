@@ -50,10 +50,10 @@ Il backend a volte va offline per crash del processo Python (OOM, errori CUDA, e
 **Branch:** `fix/backend-resilience`
 
 ### Task
-- [ ] Aggiungere `@app.exception_handler(Exception)` globale che logga e ritorna 500
-- [ ] Aggiungere `asyncio.Lock()` per serializzare `/start`, `/stop`, `/cancel`
-- [ ] Wrappare trascrizione in `asyncio.wait_for()` con timeout 300s
-- [ ] Gestire `asyncio.TimeoutError` con messaggio appropriato
+- [x] Aggiungere `@app.exception_handler(Exception)` globale che logga e ritorna 500
+- [x] Aggiungere `asyncio.Lock()` per serializzare `/start`, `/stop`, `/cancel`
+- [x] Wrappare trascrizione in `asyncio.wait_for()` con timeout 300s
+- [x] Gestire `asyncio.TimeoutError` con messaggio appropriato
 
 ### Verifica
 - Eccezioni non gestite non crashano il processo (ritornano 500)

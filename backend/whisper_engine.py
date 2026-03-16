@@ -157,6 +157,23 @@ def get_models_dir() -> Path:
     models_dir.mkdir(parents=True, exist_ok=True)
     return models_dir
 
+PUNCTUATION_PROMPTS = {
+    "en": "Hello, how are you? I'm doing well, thank you. Let me explain: first, we need to analyze the data; second, we must prepare the report. Isn't that right? Yes, absolutely! Let's proceed.",
+    "it": "Buongiorno, come stai? Sto bene, grazie. Ti spiego: primo, dobbiamo analizzare i dati; secondo, preparare il report. Non è così? Sì, esattamente! Procediamo.",
+    "es": "Buenos días, ¿cómo estás? Estoy bien, gracias. Te explico: primero, debemos analizar los datos; segundo, preparar el informe. ¿No es así? ¡Sí, exactamente! Procedamos.",
+    "fr": "Bonjour, comment allez-vous ? Je vais bien, merci. Laissez-moi vous expliquer : premièrement, nous devons analyser les données ; deuxièmement, préparer le rapport. N'est-ce pas ? Oui, absolument ! Procédons.",
+    "de": "Guten Tag, wie geht es Ihnen? Mir geht es gut, danke. Lassen Sie mich erklären: Erstens müssen wir die Daten analysieren; zweitens den Bericht vorbereiten. Nicht wahr? Ja, genau! Lassen Sie uns fortfahren.",
+    "pt": "Bom dia, como você está? Estou bem, obrigado. Deixe-me explicar: primeiro, precisamos analisar os dados; segundo, preparar o relatório. Não é? Sim, exatamente! Vamos prosseguir.",
+    "ja": "こんにちは、お元気ですか？元気です、ありがとうございます。説明させてください。まず、データを分析する必要があります。次に、レポートを準備しなければなりません。そうですよね？はい、その通りです！進めましょう。",
+    "zh": "你好，你好吗？我很好，谢谢。让我解释一下：第一，我们需要分析数据；第二，我们必须准备报告。不是吗？是的，没错！我们继续吧。",
+    "ko": "안녕하세요, 어떻게 지내세요? 잘 지내고 있습니다, 감사합니다. 설명하겠습니다: 첫째, 데이터를 분석해야 합니다. 둘째, 보고서를 준비해야 합니다. 그렇지 않나요? 네, 맞습니다! 진행합시다.",
+    "ru": "Здравствуйте, как дела? Хорошо, спасибо. Позвольте объяснить: во-первых, нам нужно проанализировать данные; во-вторых, подготовить отчёт. Не так ли? Да, именно! Давайте продолжим.",
+    "ar": "مرحباً، كيف حالك؟ أنا بخير، شكراً. دعني أوضح: أولاً، نحتاج إلى تحليل البيانات؛ ثانياً، يجب إعداد التقرير. أليس كذلك؟ نعم، بالضبط! لنتابع.",
+    "nl": "Goedendag, hoe gaat het? Goed, dank u. Laat me uitleggen: ten eerste moeten we de gegevens analyseren; ten tweede het rapport voorbereiden. Nietwaar? Ja, precies! Laten we doorgaan.",
+    "pl": "Dzień dobry, jak się masz? Dobrze, dziękuję. Pozwól, że wyjaśnię: po pierwsze, musimy przeanalizować dane; po drugie, przygotować raport. Czyż nie? Tak, dokładnie! Kontynuujmy.",
+    "default": "Hello, how are you? I'm doing well, thank you. Let me explain: first, we need to analyze the data; second, we must prepare the report. Isn't that right? Yes, absolutely! Let's proceed.",
+}
+
 # Try to import faster-whisper
 try:
     from faster_whisper import WhisperModel
@@ -346,7 +363,10 @@ class WhisperEngine:
         self,
         audio_data: np.ndarray,
         language: Optional[str] = None,
-        task: str = "transcribe"
+        task: str = "transcribe",
+        transcription_mode: str = "quality",
+        enhanced_punctuation: bool = True,
+        context_prompt: Optional[str] = None
     ) -> Dict:
         """
         Transcribe audio data
@@ -355,6 +375,9 @@ class WhisperEngine:
             audio_data: Audio data as numpy array (float32, mono, 16kHz)
             language: Language code (e.g., 'en', 'es') or None for auto-detect
             task: 'transcribe' or 'translate'
+            transcription_mode: 'fast', 'balanced', or 'quality'
+            enhanced_punctuation: inject language-specific punctuation prompt
+            context_prompt: custom initial_prompt (overrides enhanced_punctuation)
 
         Returns:
             Dictionary with transcription results
@@ -381,19 +404,32 @@ class WhisperEngine:
             if len(audio_data.shape) > 1:
                 audio_data = audio_data.flatten()
 
-            # Transcribe with optimized settings for speed
+            MODE_PARAMS = {
+                "fast":     {"beam_size": 1, "condition_on_previous_text": False},
+                "balanced": {"beam_size": 3, "condition_on_previous_text": True},
+                "quality":  {"beam_size": 5, "condition_on_previous_text": True},
+            }
+            params = MODE_PARAMS.get(transcription_mode, MODE_PARAMS["quality"])
+
+            initial_prompt = None
+            if context_prompt:
+                initial_prompt = context_prompt
+            elif enhanced_punctuation:
+                initial_prompt = PUNCTUATION_PROMPTS.get(language, PUNCTUATION_PROMPTS["default"])
+
+            logger.info(f"   Mode: {transcription_mode} (beam_size={params['beam_size']}, condition_on_previous={params['condition_on_previous_text']})")
+            if initial_prompt:
+                logger.info(f"   Initial prompt: {initial_prompt[:60]}...")
+
             segments, info = self.model.transcribe(
                 audio_data,
                 language=language,
                 task=task,
-                beam_size=1,  # Greedy decoding for speed (was 5)
-                best_of=1,  # Single pass for speed
-                temperature=0.0,  # Deterministic
-                vad_filter=False,  # DISABLED - was removing all speech
-                # vad_parameters=dict(
-                #     min_silence_duration_ms=300
-                # ),
-                condition_on_previous_text=False  # Don't wait for context
+                beam_size=params["beam_size"],
+                condition_on_previous_text=params["condition_on_previous_text"],
+                temperature=0.0,
+                vad_filter=False,
+                initial_prompt=initial_prompt,
             )
             
             # Collect segments

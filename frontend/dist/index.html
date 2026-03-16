@@ -598,6 +598,32 @@
             border-color: #667eea;
         }
 
+        /* Context Prompt Textarea */
+        .context-prompt-input {
+            width: 100%;
+            min-height: 60px;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-main);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+        .context-prompt-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .context-prompt-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
         /* Volume Slider */
         .volume-slider {
             width: 100%;
@@ -887,6 +913,40 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Transcription Mode</div>
+                        <div class="config-row-description">Balance between speed and accuracy (punctuation, formatting)</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="device-buttons">
+                            <button class="device-btn" id="modeFast" onclick="selectTranscriptionMode('fast')">Fast</button>
+                            <button class="device-btn" id="modeBalanced" onclick="selectTranscriptionMode('balanced')">Balanced</button>
+                            <button class="device-btn active" id="modeQuality" onclick="selectTranscriptionMode('quality')">Quality</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <div class="config-row-left">
+                        <div class="config-row-title">Enhanced Punctuation</div>
+                        <div class="config-row-description">Improve punctuation accuracy with contextual hints</div>
+                    </div>
+                    <div class="config-row-right">
+                        <div class="toggle-switch active" id="punctuationToggle" onclick="toggleEnhancedPunctuation()"></div>
+                    </div>
+                </div>
+
+                <div class="config-row" style="flex-direction: column; align-items: flex-start;">
+                    <div class="config-row-left" style="margin-bottom: 8px;">
+                        <div class="config-row-title">Context Prompt</div>
+                        <div class="config-row-description">Provide example text to guide transcription style and vocabulary. Overrides Enhanced Punctuation when set.</div>
+                    </div>
+                    <textarea id="contextPrompt" class="context-prompt-input"
+                        placeholder="e.g., Hello, how are you? I'd like to discuss the project: timeline, budget, and deliverables."
+                        oninput="debouncedSaveContextPrompt()"></textarea>
+                </div>
             </div>
 
             <!-- Appearance Section -->
@@ -1055,6 +1115,9 @@
         let soundEffectsEnabled = true;
         let volume = 80;
         let preferredLanguages = [];
+        let selectedTranscriptionMode = 'quality';
+        let enhancedPunctuationEnabled = true;
+        let contextPromptTimeout = null;
 
         // Sound Effects using Web Audio API
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1331,6 +1394,65 @@
                 await invoke('set_clipboard_paste', { enabled: clipboardPasteEnabled });
             } catch (error) {
                 console.error('❌ Error setting clipboard paste:', error);
+            }
+        }
+
+        // Transcription Mode
+        async function selectTranscriptionMode(mode) {
+            selectedTranscriptionMode = mode;
+
+            const buttons = {
+                'fast': document.getElementById('modeFast'),
+                'balanced': document.getElementById('modeBalanced'),
+                'quality': document.getElementById('modeQuality')
+            };
+
+            Object.values(buttons).forEach(btn => btn.classList.remove('active'));
+            buttons[mode].classList.add('active');
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_transcription_mode', { mode: mode });
+                console.log('Transcription mode saved:', mode);
+            } catch (error) {
+                console.error('Error setting transcription mode:', error);
+            }
+        }
+
+        // Enhanced Punctuation
+        async function toggleEnhancedPunctuation() {
+            const toggle = document.getElementById('punctuationToggle');
+            enhancedPunctuationEnabled = !enhancedPunctuationEnabled;
+
+            if (enhancedPunctuationEnabled) {
+                toggle.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+            }
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_enhanced_punctuation', { enabled: enhancedPunctuationEnabled });
+                console.log('Enhanced punctuation saved:', enhancedPunctuationEnabled);
+            } catch (error) {
+                console.error('Error setting enhanced punctuation:', error);
+            }
+        }
+
+        // Context Prompt (debounced save)
+        function debouncedSaveContextPrompt() {
+            if (contextPromptTimeout) clearTimeout(contextPromptTimeout);
+            contextPromptTimeout = setTimeout(saveContextPrompt, 500);
+        }
+
+        async function saveContextPrompt() {
+            const prompt = document.getElementById('contextPrompt').value;
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('set_context_prompt', { prompt: prompt });
+                console.log('Context prompt saved (length:', prompt.length, ')');
+            } catch (error) {
+                console.error('Error setting context prompt:', error);
             }
         }
 
@@ -2099,6 +2221,50 @@
                 }
             } catch (error) {
                 console.error('❌ Error loading model/device from state:', error);
+            }
+
+            // Load transcription mode
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const mode = await invoke('get_transcription_mode');
+                selectedTranscriptionMode = mode;
+                const modeButtons = {
+                    'fast': document.getElementById('modeFast'),
+                    'balanced': document.getElementById('modeBalanced'),
+                    'quality': document.getElementById('modeQuality')
+                };
+                Object.values(modeButtons).forEach(btn => btn.classList.remove('active'));
+                if (modeButtons[mode]) {
+                    modeButtons[mode].classList.add('active');
+                }
+            } catch (error) {
+                console.error('Error loading transcription mode:', error);
+            }
+
+            // Load enhanced punctuation setting
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const enabled = await invoke('get_enhanced_punctuation');
+                enhancedPunctuationEnabled = enabled;
+                const toggle = document.getElementById('punctuationToggle');
+                if (enabled) {
+                    toggle.classList.add('active');
+                } else {
+                    toggle.classList.remove('active');
+                }
+            } catch (error) {
+                console.error('Error loading enhanced punctuation:', error);
+            }
+
+            // Load context prompt
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const prompt = await invoke('get_context_prompt');
+                if (prompt) {
+                    document.getElementById('contextPrompt').value = prompt;
+                }
+            } catch (error) {
+                console.error('Error loading context prompt:', error);
             }
 
             // Start real-time backend health polling

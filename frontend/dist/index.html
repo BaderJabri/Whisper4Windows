@@ -1047,7 +1047,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = 'http://127.0.0.1:8000';
+        const BACKEND_URL = 'http://127.0.0.1:27849';  // keep in sync with BACKEND_PORT in backend/main.py
         let selectedDevice = 'auto';
         let clipboardPasteEnabled = true;
         let launchOnStartup = false;
@@ -1225,15 +1225,22 @@
 
         async function checkBackendHealth() {
             try {
-                const response = await fetch(`${BACKEND_URL}/health`, {
-                    method: 'GET',
-                    mode: 'cors',
-                    headers: { 'Accept': 'application/json' },
-                    signal: AbortSignal.timeout(3000) // 3 second timeout
-                });
-                const data = await response.json();
+                // Checked in Rust: the webview can't read replies from a foreign server (no CORS headers)
+                const { invoke } = window.__TAURI_INTERNALS__;
+                const data = await invoke('check_backend_health');
+                if (data.status === 'offline') {
+                    throw new Error('Backend not reachable');
+                }
 
                 const statusEl = document.getElementById('backendStatus');
+                if (data.status === 'conflict') {
+                    // Something else answered on our port - restarting our backend won't help
+                    statusEl.innerHTML = `<span>⚠️</span><span>Port ${new URL(BACKEND_URL).port} is used by another application</span>`;
+                    statusEl.classList.remove('starting', 'checking');
+                    statusEl.classList.add('offline');
+                    lastBackendStatus = 'conflict';
+                    return;
+                }
                 statusEl.innerHTML = `<span>✅</span><span>${data.backend.toUpperCase()} Ready (${data.model})</span>`;
                 statusEl.classList.remove('offline', 'starting', 'checking');
                 lastBackendStatus = 'online';

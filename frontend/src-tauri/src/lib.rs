@@ -18,6 +18,9 @@ use windows::Win32::{
 };
 use tokio::sync::Mutex;
 use anyhow::Result;
+
+// Keep in sync with BACKEND_PORT in backend/main.py and BACKEND_URL in frontend/dist/*.html.
+const BACKEND_URL: &str = "http://127.0.0.1:27849";
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, GlobalShortcutExt};
 use std::path::PathBuf;
 use std::fs;
@@ -345,7 +348,7 @@ async fn cmd_start_recording(app: AppHandle, state: State<'_, AppState>) -> Resu
             request_body["device_index"] = serde_json::json!(device_index);
         }
 
-        match client.post("http://127.0.0.1:8000/start")
+        match client.post(format!("{}/start", BACKEND_URL))
             .json(&request_body)
             .send()
             .await
@@ -369,7 +372,7 @@ async fn cmd_cancel_recording(app: AppHandle) -> Result<(), String> {
     // Call backend /cancel
     let client = reqwest::Client::new();
     tokio::spawn(async move {
-        match client.post("http://127.0.0.1:8000/cancel")
+        match client.post(format!("{}/cancel", BACKEND_URL))
             .send()
             .await
         {
@@ -407,7 +410,7 @@ async fn cmd_stop_recording(app: AppHandle, state: State<'_, AppState>) -> Resul
 
     // Call backend /stop to get transcription
     let client = reqwest::Client::new();
-    let text_to_inject = match client.post("http://127.0.0.1:8000/stop")
+    let text_to_inject = match client.post(format!("{}/stop", BACKEND_URL))
         .send()
         .await
     {
@@ -509,7 +512,7 @@ async fn set_model_and_device(
             serde_json::json!(language)
         };
 
-        match client.post("http://127.0.0.1:8000/load_model")
+        match client.post(format!("{}/load_model", BACKEND_URL))
             .json(&serde_json::json!({
                 "model_size": model_clone,
                 "device": device_clone,
@@ -948,6 +951,31 @@ async fn check_for_updates() -> Result<String, String> {
     Ok("No updates available".to_string())  // TODO: Implement GitHub release check
 }
 
+// Backend health check, done here rather than in the webview: a foreign server on our port
+// usually sends no CORS headers, so a webview fetch can't tell it apart from "nothing listening"
+#[tauri::command]
+async fn check_backend_health() -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = match client.get(format!("{}/health", BACKEND_URL)).send().await {
+        Ok(resp) => resp,
+        Err(_) => return Ok(serde_json::json!({ "status": "offline" })),
+    };
+
+    // Something answered; make sure it is our backend
+    match resp.json::<serde_json::Value>().await {
+        Ok(data) if data["service"] == "whisper4windows" => Ok(serde_json::json!({
+            "status": "online",
+            "backend": data["backend"],
+            "model": data["model"],
+        })),
+        _ => Ok(serde_json::json!({ "status": "conflict" })),
+    }
+}
+
 // Restart backend command
 #[tauri::command]
 async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
@@ -970,15 +998,7 @@ async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(
 
     // Start new backend
     log::info!("🚀 Starting new backend process...");
-    use tauri_plugin_shell::ShellExt;
-
-    let sidecar_command = app.shell()
-        .sidecar("whisper-backend")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?;
-
-    let (_rx, child) = sidecar_command
-        .spawn()
-        .map_err(|e| format!("Failed to spawn backend sidecar: {}", e))?;
+    let child = spawn_backend(&app)?;
 
     // Store the new child process
     *state.backend_child.lock().await = Some(child);
@@ -988,6 +1008,37 @@ async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(
     log::info!("✅ Backend restarted successfully");
 
     Ok(())
+}
+
+// Spawn the backend sidecar and forward its output to the app log,
+// so startup failures (e.g. port already in use) are visible in app.log
+fn spawn_backend(app: &AppHandle) -> Result<tauri_plugin_shell::process::CommandChild, String> {
+    use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+
+    let (mut rx, child) = app.shell()
+        .sidecar("whisper-backend")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
+        .env("PYTHONIOENCODING", "utf-8")  // backend logs contain emoji; default pipe encoding is cp1252
+        .spawn()
+        .map_err(|e| format!("Failed to spawn backend sidecar: {}", e))?;
+
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                // Python logging writes everything (including INFO) to stderr, so don't treat it as errors
+                CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+                    log::info!("[backend] {}", String::from_utf8_lossy(&line).trim_end());
+                }
+                CommandEvent::Error(e) => log::error!("[backend] {}", e),
+                CommandEvent::Terminated(payload) => {
+                    log::error!("❌ Backend process exited (code: {:?})", payload.code);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    Ok(child)
 }
 
 // Tray menu
@@ -1116,16 +1167,7 @@ pub fn run() {
 
             // Start backend sidecar
             log::info!("🔧 Starting backend server...");
-            use tauri_plugin_shell::ShellExt;
-
-            let sidecar_command = app.app_handle()
-                .shell()
-                .sidecar("whisper-backend")
-                .expect("Failed to create sidecar command");
-
-            let (_rx, child) = sidecar_command
-                .spawn()
-                .expect("Failed to spawn backend sidecar");
+            let child = spawn_backend(app.app_handle()).expect("Failed to spawn backend sidecar");
 
             // Store the child process in state so we can kill it on app exit
             let state: tauri::State<AppState> = app.state();
@@ -1276,7 +1318,7 @@ pub fn run() {
                     serde_json::json!(language)
                 };
 
-                match client.post("http://127.0.0.1:8000/load_model")
+                match client.post(format!("{}/load_model", BACKEND_URL))
                     .json(&serde_json::json!({
                         "model_size": model,
                         "device": device,
@@ -1316,6 +1358,7 @@ pub fn run() {
             get_language,
             save_shortcuts,
             get_toggle_shortcut,
+            check_backend_health,
             get_cancel_shortcut,
             get_preferred_languages,
             set_preferred_languages,

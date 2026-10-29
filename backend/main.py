@@ -25,6 +25,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Keep in sync with BACKEND_URL in frontend/src-tauri/src/lib.rs and frontend/dist/*.html.
+# Avoid 8000 (default for many local dev/LLM servers) and the ephemeral ranges
+# (Windows 49152+, Linux 32768+; WSL mirrored networking reserves the latter on Windows too).
+BACKEND_PORT = 27849
+SERVICE_NAME = "whisper4windows"
+
 # Global instances
 audio_capture: Optional[AudioCapture] = None
 whisper_engine: Optional[WhisperEngine] = None
@@ -57,6 +63,7 @@ class TranscriptionResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+    service: str
     backend: str
     model: str
     recording: bool
@@ -68,9 +75,9 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("🚀 Whisper4Windows Backend Starting...")
     logger.info("=" * 60)
-    logger.info(f"Server: http://127.0.0.1:8000")
-    logger.info(f"API Docs: http://127.0.0.1:8000/docs")
-    logger.info(f"Health Check: http://127.0.0.1:8000/health")
+    logger.info(f"Server: http://127.0.0.1:{BACKEND_PORT}")
+    logger.info(f"API Docs: http://127.0.0.1:{BACKEND_PORT}/docs")
+    logger.info(f"Health Check: http://127.0.0.1:{BACKEND_PORT}/health")
     logger.info("=" * 60)
 
     # Check GPU libraries at startup
@@ -146,6 +153,7 @@ async def health_check():
 
     return HealthResponse(
         status="ok",
+        service=SERVICE_NAME,
         backend=backend,
         model=model,
         recording=is_recording
@@ -655,6 +663,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="127.0.0.1",
-        port=8000,
+        port=BACKEND_PORT,
         log_level="info"
     )

@@ -984,7 +984,7 @@ async fn restart_backend(app: AppHandle, state: State<'_, AppState>) -> Result<(
     // Kill existing backend if running
     if let Some(child) = state.backend_child.lock().await.take() {
         log::info!("🛑 Killing existing backend process...");
-        match child.kill() {
+        match kill_backend(child) {
             Ok(_) => {
                 log::info!("✅ Backend process killed");
                 // Give it a moment to fully terminate
@@ -1041,6 +1041,27 @@ fn spawn_backend(app: &AppHandle) -> Result<tauri_plugin_shell::process::Command
     Ok(child)
 }
 
+// Kill the backend including its child processes. The PyInstaller --onefile backend runs as a
+// bootloader plus a child Python process; killing only the bootloader leaves the server running
+// and holding the port, so the next app start can't bind it
+fn kill_backend(child: tauri_plugin_shell::process::CommandChild) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let tree_killed = std::process::Command::new("taskkill")
+        .args(["/PID", &child.pid().to_string(), "/T", "/F"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+
+    if tree_killed {
+        Ok(())
+    } else {
+        child.kill().map_err(|e| e.to_string())
+    }
+}
+
 // Tray menu
 fn create_tray_menu(app: &AppHandle) -> Result<Menu<tauri::Wry>, tauri::Error> {
     let toggle = MenuItem::with_id(app, "toggle", "🎙️ Start/Stop Recording (F9)", true, None::<&str>)?;
@@ -1091,7 +1112,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 let state: tauri::State<AppState> = app_clone.state();
                 if let Some(child) = state.backend_child.lock().await.take() {
                     log::info!("🛑 Killing backend process...");
-                    match child.kill() {
+                    match kill_backend(child) {
                         Ok(_) => {
                             log::info!("✅ Backend process kill signal sent");
                             // Give it a moment to terminate
